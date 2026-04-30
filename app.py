@@ -181,9 +181,8 @@ if uploaded_file and st.session_state.retriever is None:
 # LLM (OPENAI)
 # ------------------------------
 llm = ChatOpenAI(
-    model="gpt-3.5-turbo",
-    temperature=0,
-    api_key=os.getenv("OPENAI_API_KEY")
+    model="gpt-4o-mini",
+    temperature=0
 )
 
 # ------------------------------
