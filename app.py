@@ -201,9 +201,12 @@ if uploaded_file and st.session_state.retriever is None:
 # ------------------------------
 # LLM (FREE MODEL)
 # ------------------------------
+from transformers import pipeline
+from langchain_community.llms import HuggingFacePipeline
+
 pipe = pipeline(
-    "text-text-generation",
-    pipeline("text-generation", model="gpt2"),
+    "text-generation",   # ✅ correct task
+    model="gpt2",
     max_new_tokens=150
 )
 
