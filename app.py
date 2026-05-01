@@ -145,10 +145,9 @@ uploaded_files = st.file_uploader(
 )
 
 if uploaded_files:
-    if st.session_state.last_file != uploaded_file.name:
         st.session_state.retriever = None
         st.session_state.messages = []
-        st.session_state.last_file = uploaded_file.name
+        
 
 # ------------------------------
 # PROCESS FILE
