@@ -203,7 +203,7 @@ if uploaded_file and st.session_state.retriever is None:
 # ------------------------------
 pipe = pipeline(
     "text-text-generation",
-    pipeline("text-generation", model="gpt2")
+    pipeline("text-generation", model="gpt2"),
     max_new_tokens=150
 )
 
