@@ -138,8 +138,8 @@ if st.sidebar.button("Logout"):
 # ------------------------------
 # FILE UPLOAD
 # ------------------------------
-uploaded_file = st.file_uploader(
-    "Upload your file",
+uploaded_files = st.file_uploader(
+    "Upload your files",
     type=["pdf", "txt", "docx", "xlsx"],
     accept_multiple_files=True
 )
