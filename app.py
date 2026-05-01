@@ -140,7 +140,8 @@ if st.sidebar.button("Logout"):
 # ------------------------------
 uploaded_file = st.file_uploader(
     "Upload your file",
-    type=["pdf", "txt", "docx", "xlsx"]
+    type=["pdf", "txt", "docx", "xlsx"],
+    accept_multiple_files=True
 )
 
 if uploaded_file:
@@ -165,6 +166,9 @@ if uploaded_file and st.session_state.retriever is None:
 
             loader = PyPDFLoader(pdf_path)
             docs = loader.load()
+            for doc in docs:
+                doc.metadata["source"] = uploaded_file.name
+            all_doxs.extend(docs)
 
         elif file_type == "txt":
             text = uploaded_file.read().decode("utf-8")
@@ -183,18 +187,17 @@ if uploaded_file and st.session_state.retriever is None:
             docs = [Document(page_content=text)]
 
         else:
-            st.error("Unsupported file type")
-            st.stop()
-
+            continue
+        all_docs.extend(docs)
         splitter = RecursiveCharacterTextSplitter(
             chunk_size=500,
-            chunk_overlap=200
+            chunk_overlap=100
         )
 
-        chunks = splitter.split_documents(docs)
+        chunks = splitter.split_documents(all_docs)
 
         vectorstore = FAISS.from_documents(chunks, st.session_state.embeddings)
-        st.session_state.retriever = vectorstore.as_retriever(search_kwargs={"k": 2})
+        st.session_state.retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
 
         st.success("File processed successfully!")
 
