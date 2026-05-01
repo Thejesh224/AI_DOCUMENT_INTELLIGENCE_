@@ -1,7 +1,6 @@
 # ============================================================
-# AI DOCUMENT INTELLIGENCE SYSTEM (DEPLOYABLE VERSION)
-# LOGIN + SIGNUP + USER COUNT + RAG + CHAT UI
-# Uses OpenAI instead of Ollama
+# AI DOCUMENT INTELLIGENCE SYSTEM (FINAL WORKING VERSION)
+# LOGIN + MULTI-FILE + RAG + CHAT UI (FREE MODEL)
 # ============================================================
 
 import tempfile
@@ -10,19 +9,22 @@ import json
 import os
 from dotenv import load_dotenv
 
-# MUST BE FIRST STREAMLIT CALL
 st.set_page_config(page_title="AI Document Intelligence System", layout="wide")
-
-# Load environment variables
 load_dotenv()
 
-# LangChain imports
+# ------------------------------
+# IMPORTS
+# ------------------------------
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.messages import HumanMessage, AIMessage
+from langchain.schema import Document
+
+from transformers import pipeline
+from langchain_community.llms import HuggingFacePipeline
 
 # ------------------------------
 # USER STORAGE
@@ -40,13 +42,10 @@ def load_users():
         try:
             data = json.load(f)
         except:
-            data = {}
+            data = {"users": {}, "count": 0}
 
-    if "users" not in data:
-        data["users"] = {}
-    if "count" not in data:
-        data["count"] = 0
-
+    data.setdefault("users", {})
+    data.setdefault("count", 0)
     return data
 
 def save_users(data):
@@ -96,12 +95,9 @@ def auth_page():
             if username in data["users"] and data["users"][username] == password:
                 st.session_state.logged_in = True
                 st.session_state.username = username
-
                 data["count"] += 1
                 save_users(data)
                 st.session_state.user_count = data["count"]
-
-                st.success(f"Welcome {username}")
                 st.rerun()
             else:
                 st.error("Invalid credentials")
@@ -145,7 +141,7 @@ if st.sidebar.button("Logout"):
 # ------------------------------
 uploaded_file = st.file_uploader(
     "Upload your file",
-    type=["pdf", "txt", "docx", "xlsx", "png", "jpg"]
+    type=["pdf", "txt", "docx", "xlsx"]
 )
 
 if uploaded_file:
@@ -155,17 +151,41 @@ if uploaded_file:
         st.session_state.last_file = uploaded_file.name
 
 # ------------------------------
-# PROCESS PDF
+# PROCESS FILE
 # ------------------------------
 if uploaded_file and st.session_state.retriever is None:
 
-    with st.spinner("Processing PDF..."):
+    with st.spinner("Processing file..."):
 
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
-            tmp.write(uploaded_file.read())
-            pdf_path = tmp.name
+        file_type = uploaded_file.name.split(".")[-1].lower()
 
-        docs = PyPDFLoader(pdf_path).load()
+        if file_type == "pdf":
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+                tmp.write(uploaded_file.read())
+                pdf_path = tmp.name
+
+            loader = PyPDFLoader(pdf_path)
+            docs = loader.load()
+
+        elif file_type == "txt":
+            text = uploaded_file.read().decode("utf-8")
+            docs = [Document(page_content=text)]
+
+        elif file_type == "docx":
+            from docx import Document as DocxDocument
+            doc = DocxDocument(uploaded_file)
+            text = "\n".join([p.text for p in doc.paragraphs])
+            docs = [Document(page_content=text)]
+
+        elif file_type == "xlsx":
+            import pandas as pd
+            df = pd.read_excel(uploaded_file)
+            text = df.to_string()
+            docs = [Document(page_content=text)]
+
+        else:
+            st.error("Unsupported file type")
+            st.stop()
 
         splitter = RecursiveCharacterTextSplitter(
             chunk_size=1000,
@@ -177,22 +197,19 @@ if uploaded_file and st.session_state.retriever is None:
         vectorstore = FAISS.from_documents(chunks, st.session_state.embeddings)
         st.session_state.retriever = vectorstore.as_retriever(search_kwargs={"k": 4})
 
-        st.success("PDF ready!")
+        st.success("File processed successfully!")
 
 # ------------------------------
-# LLM (OPENAI)
+# LLM (FREE MODEL)
 # ------------------------------
-
-from transformers import pipeline
-from langchain_community.llms import HuggingFacePipeline
-
 pipe = pipeline(
-    task="text-generation",   # ✅ FIXED
+    "text2text-generation",
     model="google/flan-t5-base",
-    max_new_tokens=512
+    max_new_tokens=256
 )
 
 llm = HuggingFacePipeline(pipeline=pipe)
+
 # ------------------------------
 # PROMPT
 # ------------------------------
@@ -208,12 +225,9 @@ st.divider()
 st.subheader("💬 Chat")
 
 for msg in st.session_state.messages:
-    if isinstance(msg, HumanMessage):
-        with st.chat_message("user"):
-            st.write(msg.content)
-    else:
-        with st.chat_message("assistant"):
-            st.write(msg.content)
+    role = "user" if isinstance(msg, HumanMessage) else "assistant"
+    with st.chat_message(role):
+        st.write(msg.content)
 
 # ------------------------------
 # CHAT INPUT
@@ -222,7 +236,6 @@ if st.session_state.retriever:
     question = st.chat_input("Ask your question...")
 
     if question:
-
         with st.chat_message("user"):
             st.write(question)
 
@@ -234,7 +247,7 @@ if st.session_state.retriever:
                 prompt.format_messages(question=question, context=context)
             )
 
-            answer = response
+            answer = response  # HuggingFace returns string
 
         with st.chat_message("assistant"):
             st.write(answer)
