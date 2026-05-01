@@ -7,3 +7,4 @@ python-dotenv
 pypdf
 transformers
 torch
+transformers>=4.40.0
