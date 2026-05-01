@@ -181,15 +181,11 @@ if uploaded_file and st.session_state.retriever is None:
 # LLM (OPENAI)
 # ------------------------------
 
-llm = ChatOpenAI(
-    model="gpt-4o-mini",
-    temperature=0
-)
 from langchain_community.llms import HuggingFacePipeline
 from transformers import pipeline
 
 pipe = pipeline(
-    "text-generation",
+    "text2text-generation",
     model="google/flan-t5-base",
     max_length=512
 )
