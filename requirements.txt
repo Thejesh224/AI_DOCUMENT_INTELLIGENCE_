@@ -8,3 +8,7 @@ pypdf
 transformers
 torch
 transformers>=4.40.0
+pandas
+python-docx
+pillow
+pytesseract
