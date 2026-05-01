@@ -231,7 +231,7 @@ if st.session_state.retriever:
                 prompt.format_messages(question=question, context=context)
             )
 
-            answer = response.content
+            answer = response
 
         with st.chat_message("assistant"):
             st.write(answer)
