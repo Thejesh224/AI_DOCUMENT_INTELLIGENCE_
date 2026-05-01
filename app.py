@@ -21,8 +21,7 @@ from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.messages import HumanMessage, AIMessage
-from langchain.schema import Document
-
+from langchain_core.documents import Document
 from transformers import pipeline
 from langchain_community.llms import HuggingFacePipeline
 
