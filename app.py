@@ -143,7 +143,10 @@ if st.sidebar.button("Logout"):
 # ------------------------------
 # FILE UPLOAD
 # ------------------------------
-uploaded_file = st.file_uploader("Upload PDF", type=["pdf"])
+uploaded_file = st.file_uploader(
+    "Upload your file",
+    type=["pdf", "txt", "docx", "xlsx", "png", "jpg"]
+)
 
 if uploaded_file:
     if st.session_state.last_file != uploaded_file.name:
