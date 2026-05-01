@@ -187,14 +187,14 @@ if uploaded_file and st.session_state.retriever is None:
             st.stop()
 
         splitter = RecursiveCharacterTextSplitter(
-            chunk_size=1000,
+            chunk_size==500,
             chunk_overlap=200
         )
 
         chunks = splitter.split_documents(docs)
 
         vectorstore = FAISS.from_documents(chunks, st.session_state.embeddings)
-        st.session_state.retriever = vectorstore.as_retriever(search_kwargs={"k": 4})
+        st.session_state.retriever = vectorstore.as_retriever(search_kwargs={"k": 2})
 
         st.success("File processed successfully!")
 
@@ -202,9 +202,9 @@ if uploaded_file and st.session_state.retriever is None:
 # LLM (FREE MODEL)
 # ------------------------------
 pipe = pipeline(
-    "text-generation",
-    model="gpt2",
-    max_new_tokens=200
+    "text2text-generation",
+    model="google/flan-t5-base",
+    max_new_tokens=150
 )
 
 llm = HuggingFacePipeline(pipeline=pipe)
@@ -240,7 +240,7 @@ if st.session_state.retriever:
 
         with st.spinner("Thinking..."):
             docs = st.session_state.retriever.invoke(question)
-            context = "\n\n".join([doc.page_content for doc in docs])
+            context = "\n\n".join([doc.page_content for doc in docs])[:1500]
 
             response = llm.invoke(
                 prompt.format_messages(question=question, context=context)
