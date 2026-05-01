@@ -187,7 +187,7 @@ if uploaded_file and st.session_state.retriever is None:
             st.stop()
 
         splitter = RecursiveCharacterTextSplitter(
-            chunk_size==500,
+            chunk_size=500,
             chunk_overlap=200
         )
 
