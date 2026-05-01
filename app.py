@@ -202,9 +202,9 @@ if uploaded_file and st.session_state.retriever is None:
 # LLM (FREE MODEL)
 # ------------------------------
 pipe = pipeline(
-    "text2text-generation",
-    model="google/flan-t5-base",
-    max_new_tokens=256
+    "text-generation",
+    model="gpt2",
+    max_new_tokens=200
 )
 
 llm = HuggingFacePipeline(pipeline=pipe)
