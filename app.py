@@ -153,42 +153,49 @@ if uploaded_file:
 # ------------------------------
 # PROCESS FILE
 # ------------------------------
-if uploaded_file and st.session_state.retriever is None:
+if uploaded_files and st.session_state.retriever is None:
 
-    with st.spinner("Processing file..."):
+    all_docs = []
 
-        file_type = uploaded_file.name.split(".")[-1].lower()
+    with st.spinner("Processing files..."):
 
-        if file_type == "pdf":
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
-                tmp.write(uploaded_file.read())
-                pdf_path = tmp.name
+        for uploaded_file in uploaded_files:
 
-            loader = PyPDFLoader(pdf_path)
-            docs = loader.load()
+            file_type = uploaded_file.name.split(".")[-1].lower()
+
+            if file_type not in ["pdf", "txt", "docx", "xlsx"]:
+                continue
+
+            if file_type == "pdf":
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+                    tmp.write(uploaded_file.read())
+                    pdf_path = tmp.name
+
+                loader = PyPDFLoader(pdf_path)
+                docs = loader.load()
+
+            elif file_type == "txt":
+                text = uploaded_file.read().decode("utf-8")
+                docs = [Document(page_content=text)]
+
+            elif file_type == "docx":
+                from docx import Document as DocxDocument
+                doc = DocxDocument(uploaded_file)
+                text = "\n".join([p.text for p in doc.paragraphs])
+                docs = [Document(page_content=text)]
+
+            elif file_type == "xlsx":
+                import pandas as pd
+                df = pd.read_excel(uploaded_file)
+                text = df.to_string()
+                docs = [Document(page_content=text)]
+
+            # ✅ add metadata
             for doc in docs:
                 doc.metadata["source"] = uploaded_file.name
-            all_doxs.extend(docs)
 
-        elif file_type == "txt":
-            text = uploaded_file.read().decode("utf-8")
-            docs = [Document(page_content=text)]
+            all_docs.extend(docs)
 
-        elif file_type == "docx":
-            from docx import Document as DocxDocument
-            doc = DocxDocument(uploaded_file)
-            text = "\n".join([p.text for p in doc.paragraphs])
-            docs = [Document(page_content=text)]
-
-        elif file_type == "xlsx":
-            import pandas as pd
-            df = pd.read_excel(uploaded_file)
-            text = df.to_string()
-            docs = [Document(page_content=text)]
-
-        else:
-            continue
-        all_docs.extend(docs)
         splitter = RecursiveCharacterTextSplitter(
             chunk_size=500,
             chunk_overlap=100
@@ -197,10 +204,9 @@ if uploaded_file and st.session_state.retriever is None:
         chunks = splitter.split_documents(all_docs)
 
         vectorstore = FAISS.from_documents(chunks, st.session_state.embeddings)
-        st.session_state.retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
+        st.session_state.retriever = vectorstore.as_retriever(search_kwargs={"k": 2})
 
-        st.success("File processed successfully!")
-
+        st.success("Files processed successfully!")
 # ------------------------------
 # LLM (FREE MODEL)
 # ------------------------------
