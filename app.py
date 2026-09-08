@@ -213,9 +213,11 @@ from transformers import pipeline
 from langchain_community.llms import HuggingFacePipeline
 
 pipe = pipeline(
-    "text-generation",   # ✅ correct task
+    "text-generation",
     model="gpt2",
-    max_new_tokens=150
+    max_new_tokens=150,
+    do_sample=False,
+    pad_token_id=50256
 )
 
 llm = HuggingFacePipeline(pipeline=pipe)
