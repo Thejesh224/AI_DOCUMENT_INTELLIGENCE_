@@ -2,7 +2,6 @@ import streamlit as st
 import os
 import json
 import uuid
-import html
 import requests
 import pandas as pd
 
@@ -48,7 +47,7 @@ DEFAULT_MAX_TOKENS = 100
 
 
 # ============================================================
-# WARM CLAUDE-STYLE UI
+# DARK CLAUDE-INSPIRED THEME
 # ============================================================
 
 st.markdown(
@@ -56,58 +55,60 @@ st.markdown(
 <style>
 
 /* ==========================================================
-   MAIN APP BACKGROUND
+   GLOBAL
 ========================================================== */
 
 .stApp {
-    background: #f7f5f0 !important;
-    color: #2b2926 !important;
+    background-color: #1f1e1b !important;
+    color: #f2efe8 !important;
 }
 
 [data-testid="stAppViewContainer"] {
-    background: #f7f5f0 !important;
+    background-color: #1f1e1b !important;
 }
 
 [data-testid="stMain"] {
-    background: #f7f5f0 !important;
+    background-color: #1f1e1b !important;
 }
 
 .main {
-    background: #f7f5f0 !important;
+    background-color: #1f1e1b !important;
 }
 
 .block-container {
-    max-width: 950px !important;
+    max-width: 920px !important;
     padding-top: 25px !important;
-    padding-bottom: 150px !important;
+    padding-bottom: 140px !important;
 }
 
 
 /* ==========================================================
-   HIDE STREAMLIT DEFAULT UI
+   HIDE STREAMLIT DEFAULT ELEMENTS
 ========================================================== */
 
 #MainMenu {
-    visibility: hidden !important;
+    visibility: hidden;
 }
 
 header {
-    visibility: hidden !important;
+    visibility: hidden;
 }
 
 footer {
-    visibility: hidden !important;
+    visibility: hidden;
 }
 
 
 /* ==========================================================
-   TEXT
+   GENERAL TEXT
 ========================================================== */
 
+.stApp,
 .stApp p,
 .stApp span,
-.stApp label {
-    color: #2b2926;
+.stApp label,
+.stApp div {
+    color: #f2efe8;
 }
 
 h1,
@@ -116,7 +117,7 @@ h3,
 h4,
 h5,
 h6 {
-    color: #2b2926 !important;
+    color: #f2efe8 !important;
 }
 
 
@@ -125,86 +126,71 @@ h6 {
 ========================================================== */
 
 section[data-testid="stSidebar"] {
-    background: #eeece6 !important;
-    border-right: 1px solid #dfdcd4 !important;
+    background-color: #171614 !important;
+
+    border-right: 1px solid #34312c !important;
 }
 
 section[data-testid="stSidebar"] > div {
-    background: #eeece6 !important;
+    background-color: #171614 !important;
 }
 
 section[data-testid="stSidebar"] p,
 section[data-testid="stSidebar"] span,
 section[data-testid="stSidebar"] label {
-    color: #2b2926 !important;
-}
-
-
-/* Sidebar buttons */
-
-section[data-testid="stSidebar"] button {
-    background: transparent !important;
-    color: #2b2926 !important;
-    border: none !important;
-    border-radius: 9px !important;
-}
-
-section[data-testid="stSidebar"] button:hover {
-    background: #e1dfd8 !important;
+    color: #ddd8cf !important;
 }
 
 
 /* ==========================================================
-   APP HEADER
+   SIDEBAR BUTTONS
+========================================================== */
+
+section[data-testid="stSidebar"] button {
+    background-color: transparent !important;
+
+    color: #ddd8cf !important;
+
+    border: 1px solid transparent !important;
+
+    border-radius: 9px !important;
+
+    text-align: left !important;
+}
+
+section[data-testid="stSidebar"] button:hover {
+    background-color: #292722 !important;
+
+    border-color: #3a3731 !important;
+}
+
+
+/* ==========================================================
+   MAIN HEADER
 ========================================================== */
 
 .app-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
+    padding-bottom: 16px;
 
-    padding: 5px 0 18px 0;
-
-    border-bottom: 1px solid #dedbd4;
+    border-bottom: 1px solid #36332e;
 
     margin-bottom: 25px;
 }
 
-.app-header-left {
-    display: flex;
-    align-items: center;
-    gap: 11px;
-}
-
-.app-logo {
-    width: 36px;
-    height: 36px;
-
-    border-radius: 10px;
-
-    background: #292724;
-
-    color: #ffffff !important;
-
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    font-size: 19px;
-    font-weight: 600;
-}
-
 .app-title {
-    color: #292724 !important;
+    font-size: 19px;
 
-    font-size: 18px;
     font-weight: 600;
+
+    color: #f4f0e8 !important;
 }
 
-.app-status {
-    color: #77736c !important;
-
+.app-subtitle {
     font-size: 12px;
+
+    color: #969087 !important;
+
+    margin-top: 3px;
 }
 
 
@@ -212,90 +198,74 @@ section[data-testid="stSidebar"] button:hover {
    LOGIN PAGE
 ========================================================== */
 
-.login-wrapper {
-    max-width: 520px;
+.login-container {
+    max-width: 460px;
 
-    margin: 65px auto 35px auto;
-
-    text-align: center;
-}
-
-.login-logo {
-    width: 70px;
-    height: 70px;
-
-    margin: 0 auto 20px auto;
-
-    border-radius: 18px;
-
-    background: #292724;
-
-    color: #ffffff !important;
-
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    font-size: 34px;
-    font-weight: 600;
+    margin: 100px auto 0 auto;
 }
 
 .login-title {
-    color: #292724 !important;
+    text-align: center;
 
     font-size: 32px;
-    font-weight: 700;
 
-    margin-bottom: 10px;
+    font-weight: 650;
+
+    color: #f5f1e9 !important;
+
+    margin-bottom: 8px;
 }
 
 .login-subtitle {
-    color: #77736c !important;
+    text-align: center;
 
-    font-size: 16px;
+    font-size: 14px;
 
-    margin-bottom: 25px;
+    color: #9b958b !important;
+
+    margin-bottom: 35px;
 }
 
 
 /* ==========================================================
-   TABS
+   LOGIN TABS
 ========================================================== */
 
 button[data-baseweb="tab"] {
-    color: #77736c !important;
+    color: #9e988e !important;
+
     background: transparent !important;
 }
 
 button[data-baseweb="tab"][aria-selected="true"] {
-    color: #292724 !important;
+    color: #f3eee5 !important;
 }
 
 
 /* ==========================================================
-   TEXT INPUTS
+   INPUTS
 ========================================================== */
 
 .stTextInput label {
-    color: #2b2926 !important;
+    color: #d9d3ca !important;
 }
 
 .stTextInput input {
-    background: #ffffff !important;
+    background-color: #292824 !important;
 
-    color: #2b2926 !important;
+    color: #f4f0e8 !important;
 
-    border: 1px solid #d4d0c8 !important;
+    border: 1px solid #48443d !important;
 
     border-radius: 10px !important;
 }
 
 .stTextInput input::placeholder {
-    color: #99958c !important;
+    color: #777169 !important;
 }
 
 .stTextInput input:focus {
-    border-color: #aaa59c !important;
+    border-color: #b6aea2 !important;
 
     box-shadow: none !important;
 }
@@ -306,23 +276,23 @@ button[data-baseweb="tab"][aria-selected="true"] {
 ========================================================== */
 
 .stButton button {
-    background: #292724 !important;
+    background-color: #e8e2d8 !important;
 
-    color: #ffffff !important;
+    color: #25231f !important;
 
     border: none !important;
 
-    border-radius: 10px !important;
+    border-radius: 9px !important;
 
     min-height: 42px !important;
 
-    font-weight: 500 !important;
+    font-weight: 600 !important;
 }
 
 .stButton button:hover {
-    background: #403d38 !important;
+    background-color: #f1ebe1 !important;
 
-    color: #ffffff !important;
+    color: #1d1b18 !important;
 }
 
 
@@ -331,9 +301,9 @@ button[data-baseweb="tab"][aria-selected="true"] {
 ========================================================== */
 
 [data-testid="stFileUploader"] {
-    background: #ffffff !important;
+    background-color: #272521 !important;
 
-    border: 1px solid #ddd9d1 !important;
+    border: 1px solid #3d3933 !important;
 
     border-radius: 12px !important;
 
@@ -341,7 +311,7 @@ button[data-baseweb="tab"][aria-selected="true"] {
 }
 
 [data-testid="stFileUploader"] * {
-    color: #2b2926 !important;
+    color: #ddd8cf !important;
 }
 
 
@@ -350,39 +320,34 @@ button[data-baseweb="tab"][aria-selected="true"] {
 ========================================================== */
 
 [data-testid="stExpander"] {
-    background: #faf9f6 !important;
+    background-color: #24231f !important;
 
-    border: 1px solid #ddd9d1 !important;
+    border: 1px solid #3b3832 !important;
 
     border-radius: 12px !important;
 }
 
 [data-testid="stExpander"] * {
-    color: #2b2926 !important;
+    color: #ddd8cf !important;
 }
 
 
 /* ==========================================================
-   RADIO
-========================================================== */
-
-div[data-testid="stRadio"] label {
-    color: #2b2926 !important;
-}
-
-
-/* ==========================================================
-   SELECT BOX
+   SELECT / RADIO
 ========================================================== */
 
 div[data-baseweb="select"] {
-    background: #ffffff !important;
+    background-color: #292824 !important;
 
     border-radius: 9px !important;
 }
 
 div[data-baseweb="select"] * {
-    color: #2b2926 !important;
+    color: #eee9e0 !important;
+}
+
+div[data-testid="stRadio"] label {
+    color: #ddd8cf !important;
 }
 
 
@@ -393,106 +358,33 @@ div[data-baseweb="select"] * {
 .welcome {
     text-align: center;
 
-    padding: 110px 20px 50px 20px;
+    padding-top: 125px;
+
+    padding-bottom: 70px;
 }
 
-.welcome-logo {
-    width: 58px;
-    height: 58px;
+.welcome-symbol {
+    font-size: 34px;
 
-    margin: 0 auto 22px auto;
+    margin-bottom: 20px;
 
-    border-radius: 16px;
-
-    background: #292724;
-
-    color: #ffffff !important;
-
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    font-size: 27px;
+    color: #eee7dc !important;
 }
 
 .welcome-title {
-    color: #292724 !important;
-
-    font-size: 29px;
+    font-size: 30px;
 
     font-weight: 600;
 
-    margin-bottom: 10px;
+    color: #f4f0e8 !important;
+
+    margin-bottom: 8px;
 }
 
 .welcome-text {
-    color: #77736c !important;
-
     font-size: 15px;
-}
 
-
-/* ==========================================================
-   USER MESSAGE
-========================================================== */
-
-.user-message-row {
-    display: flex;
-
-    justify-content: flex-end;
-
-    margin: 22px 0;
-}
-
-.user-message {
-    max-width: 72%;
-
-    background: #e8e5de;
-
-    color: #2b2926 !important;
-
-    padding: 12px 17px;
-
-    border-radius: 18px 18px 5px 18px;
-
-    line-height: 1.6;
-
-    font-size: 15px;
-}
-
-
-/* ==========================================================
-   AI MESSAGE
-========================================================== */
-
-.ai-message-row {
-    display: flex;
-
-    justify-content: flex-start;
-
-    margin: 26px 0;
-}
-
-.ai-message {
-    max-width: 82%;
-
-    background: transparent;
-
-    color: #2b2926 !important;
-
-    line-height: 1.75;
-
-    font-size: 15px;
-}
-
-.ai-label {
-    color: #77736c !important;
-
-    font-size: 12px;
-
-    font-weight: 600;
-
-    margin-bottom: 7px;
+    color: #969087 !important;
 }
 
 
@@ -503,9 +395,11 @@ div[data-baseweb="select"] * {
 .source-badge {
     display: inline-block;
 
-    background: #ebe8e1;
+    background-color: #2b2925;
 
-    color: #6f6b63 !important;
+    border: 1px solid #3b3832;
+
+    color: #b9b1a6 !important;
 
     border-radius: 20px;
 
@@ -513,55 +407,59 @@ div[data-baseweb="select"] * {
 
     font-size: 11px;
 
-    margin-bottom: 15px;
+    margin-bottom: 12px;
 }
 
 
 /* ==========================================================
-   USAGE CARD
+   USER CHAT
 ========================================================== */
 
-.usage-card {
-    background: #e5e2db;
+.user-message {
+    background-color: #34312b !important;
 
-    border-radius: 11px;
+    color: #f1ece4 !important;
 
-    padding: 12px;
+    padding: 12px 16px;
 
-    margin-top: 8px;
+    border-radius: 18px 18px 5px 18px;
+
+    margin: 18px 0 18px auto;
+
+    max-width: 72%;
+
+    line-height: 1.6;
+
+    font-size: 15px;
+}
+
+
+/* ==========================================================
+   AI CHAT
+========================================================== */
+
+.ai-message {
+    background-color: transparent !important;
+
+    color: #e8e2d9 !important;
+
+    max-width: 85%;
+
+    line-height: 1.75;
+
+    font-size: 15px;
+
+    margin: 25px 0;
+}
+
+.ai-label {
+    color: #a59e94 !important;
 
     font-size: 12px;
 
-    line-height: 1.8;
-
-    color: #68645d !important;
-}
-
-
-/* ==========================================================
-   SETTINGS
-========================================================== */
-
-.settings-card {
-    background: #ffffff;
-
-    border: 1px solid #ddd9d1;
-
-    border-radius: 14px;
-
-    padding: 18px;
-
-    margin-bottom: 20px;
-}
-
-.settings-title {
-    color: #292724 !important;
-
-    font-size: 16px;
-
     font-weight: 600;
 
-    margin-bottom: 15px;
+    margin-bottom: 6px;
 }
 
 
@@ -574,53 +472,80 @@ div[data-baseweb="select"] * {
 }
 
 [data-testid="stChatInput"] > div {
-    background: #ffffff !important;
+    background-color: #292824 !important;
 
-    border: 1px solid #d4d0c8 !important;
+    border: 1px solid #48443d !important;
 
     border-radius: 18px !important;
 
-    box-shadow:
-        0 5px 22px rgba(50, 45, 40, 0.08) !important;
+    box-shadow: 0 5px 25px rgba(0, 0, 0, 0.25) !important;
 }
 
 [data-testid="stChatInput"] textarea {
-    background: #ffffff !important;
+    background-color: #292824 !important;
 
-    color: #2b2926 !important;
+    color: #f4efe7 !important;
 
     border: none !important;
 }
 
 [data-testid="stChatInput"] textarea::placeholder {
-    color: #99958c !important;
+    color: #858077 !important;
 }
 
 
 /* ==========================================================
-   TOKEN LIMIT NEAR TYPING BOX
+   TOKEN LIMIT
 ========================================================== */
 
-.composer-info {
-    position: fixed;
-
-    bottom: 88px;
-
-    left: 50%;
-
-    transform: translateX(-50%);
-
-    width: min(850px, 82%);
-
+.token-info {
     text-align: right;
+
+    color: #817b72 !important;
 
     font-size: 11px;
 
-    color: #89857d !important;
+    margin-bottom: 5px;
 
-    z-index: 998;
+    padding-right: 8px;
+}
 
-    pointer-events: none;
+
+/* ==========================================================
+   USAGE CARD
+========================================================== */
+
+.usage-card {
+    background-color: #25231f;
+
+    border: 1px solid #37342e;
+
+    border-radius: 10px;
+
+    padding: 12px;
+
+    color: #aaa39a !important;
+
+    font-size: 12px;
+
+    line-height: 1.8;
+}
+
+
+/* ==========================================================
+   SETTINGS
+========================================================== */
+
+.settings-box {
+    background-color: #25231f;
+
+    border: 1px solid #3a3731;
+
+    border-radius: 12px;
+
+    padding: 16px;
+
+    margin-bottom: 20px;
 }
 
 
@@ -629,7 +554,7 @@ div[data-baseweb="select"] * {
 ========================================================== */
 
 hr {
-    border-color: #dedbd4 !important;
+    border-color: #36332e !important;
 }
 
 
@@ -639,9 +564,8 @@ hr {
 
 @media (max-width: 768px) {
 
-    .block-container {
-        padding-left: 15px !important;
-        padding-right: 15px !important;
+    .login-container {
+        margin-top: 60px;
     }
 
     .user-message {
@@ -652,9 +576,6 @@ hr {
         max-width: 94%;
     }
 
-    .composer-info {
-        width: 90%;
-    }
 }
 
 </style>
@@ -727,30 +648,17 @@ usage = load_json(
 # ============================================================
 
 defaults = {
-
     "logged_in": False,
-
     "username": None,
-
     "current_chat_id": None,
-
     "messages": [],
-
     "retriever": None,
-
     "document_text": "",
-
     "document_name": "",
-
     "source_type": "",
-
     "show_settings": False,
-
-    "response_length": DEFAULT_MAX_TOKENS,
-
-    "chat_loaded": False
+    "response_length": DEFAULT_MAX_TOKENS
 }
-
 
 for key, value in defaults.items():
 
@@ -760,7 +668,7 @@ for key, value in defaults.items():
 
 
 # ============================================================
-# TOKEN COUNT
+# TOKEN COUNTER
 # ============================================================
 
 def count_tokens(tokenizer, text):
@@ -836,13 +744,11 @@ def get_greeting():
 
         return "Good Morning"
 
-    elif hour < 17:
+    if hour < 17:
 
         return "Good Afternoon"
 
-    else:
-
-        return "Good Evening"
+    return "Good Evening"
 
 
 # ============================================================
@@ -862,8 +768,6 @@ def create_new_chat():
     st.session_state.document_name = ""
 
     st.session_state.source_type = ""
-
-    st.session_state.chat_loaded = False
 
     st.rerun()
 
@@ -945,7 +849,6 @@ def save_current_chat():
     )
 
     chats[chat_id] = {
-
         "username":
             st.session_state.username,
 
@@ -1023,8 +926,6 @@ def load_chat(chat_id):
 
         st.session_state.retriever = None
 
-    st.session_state.chat_loaded = True
-
     st.rerun()
 
 
@@ -1068,13 +969,9 @@ def login_user(username, password):
         if username not in usage:
 
             usage[username] = {
-
                 "input_tokens": 0,
-
                 "output_tokens": 0,
-
                 "total_tokens": 0,
-
                 "requests": 0
             }
 
@@ -1093,7 +990,7 @@ def login_user(username, password):
 
 
 # ============================================================
-# CREATE ACCOUNT
+# SIGNUP
 # ============================================================
 
 def signup_user(username, password):
@@ -1117,9 +1014,7 @@ def signup_user(username, password):
         return
 
     users[username] = {
-
         "password": password,
-
         "created_at":
             datetime.now().isoformat()
     }
@@ -1130,13 +1025,9 @@ def signup_user(username, password):
     )
 
     usage[username] = {
-
         "input_tokens": 0,
-
         "output_tokens": 0,
-
         "total_tokens": 0,
-
         "requests": 0
     }
 
@@ -1151,7 +1042,7 @@ def signup_user(username, password):
 
 
 # ============================================================
-# PDF
+# PROCESS PDF
 # ============================================================
 
 def process_pdf(uploaded_file):
@@ -1180,7 +1071,7 @@ def process_pdf(uploaded_file):
 
 
 # ============================================================
-# TXT
+# PROCESS TXT
 # ============================================================
 
 def process_txt(uploaded_file):
@@ -1192,7 +1083,7 @@ def process_txt(uploaded_file):
 
 
 # ============================================================
-# DOCX
+# PROCESS DOCX
 # ============================================================
 
 def process_docx(uploaded_file):
@@ -1201,25 +1092,21 @@ def process_docx(uploaded_file):
         uploaded_file
     )
 
-    paragraphs = []
+    text = []
 
     for paragraph in document.paragraphs:
 
-        text = paragraph.text.strip()
+        value = paragraph.text.strip()
 
-        if text:
+        if value:
 
-            paragraphs.append(
-                text
-            )
+            text.append(value)
 
-    return "\n".join(
-        paragraphs
-    )
+    return "\n".join(text)
 
 
 # ============================================================
-# XLSX
+# PROCESS XLSX
 # ============================================================
 
 def process_xlsx(uploaded_file):
@@ -1228,7 +1115,7 @@ def process_xlsx(uploaded_file):
         uploaded_file
     )
 
-    all_text = []
+    result = []
 
     for sheet in excel.sheet_names:
 
@@ -1237,29 +1124,26 @@ def process_xlsx(uploaded_file):
             sheet_name=sheet
         )
 
-        all_text.append(
+        result.append(
             f"Sheet: {sheet}"
         )
 
-        all_text.append(
+        result.append(
             dataframe.to_string(
                 index=False
             )
         )
 
-    return "\n\n".join(
-        all_text
-    )
+    return "\n\n".join(result)
 
 
 # ============================================================
-# WEBSITE
+# PROCESS WEBSITE
 # ============================================================
 
 def process_website(url):
 
     headers = {
-
         "User-Agent":
         "Mozilla/5.0 "
         "(Windows NT 10.0; Win64; x64) "
@@ -1303,39 +1187,31 @@ def process_website(url):
 
         if line:
 
-            lines.append(
-                line
-            )
+            lines.append(line)
 
-    return "\n".join(
-        lines
-    )
+    return "\n".join(lines)
 
 
 # ============================================================
-# LOGIN PAGE
+# LOGIN SCREEN
 # ============================================================
 
 if not st.session_state.logged_in:
 
     st.markdown(
-        """
-<div class="login-wrapper">
+        '<div class="login-container">',
+        unsafe_allow_html=True
+    )
 
-    <div class="login-logo">
-        ✦
-    </div>
+    st.markdown(
+        '<div class="login-title">AI Document Intelligence</div>',
+        unsafe_allow_html=True
+    )
 
-    <div class="login-title">
-        AI Document Intelligence
-    </div>
-
-    <div class="login-subtitle">
-        Ask questions about your documents and websites.
-    </div>
-
-</div>
-        """,
+    st.markdown(
+        '<div class="login-subtitle">'
+        'Ask questions about your documents and websites.'
+        '</div>',
         unsafe_allow_html=True
     )
 
@@ -1360,8 +1236,6 @@ if not st.session_state.logged_in:
             type="password",
             key="login_password"
         )
-
-        st.write("")
 
         if st.button(
             "Login",
@@ -1388,8 +1262,6 @@ if not st.session_state.logged_in:
             key="signup_password"
         )
 
-        st.write("")
-
         if st.button(
             "Create Account",
             use_container_width=True
@@ -1399,6 +1271,11 @@ if not st.session_state.logged_in:
                 new_username,
                 new_password
             )
+
+    st.markdown(
+        '</div>',
+        unsafe_allow_html=True
+    )
 
     st.stop()
 
@@ -1410,39 +1287,7 @@ if not st.session_state.logged_in:
 with st.sidebar:
 
     st.markdown(
-        """
-<div style="
-display:flex;
-align-items:center;
-gap:10px;
-margin-bottom:18px;
-">
-
-    <div style="
-    width:34px;
-    height:34px;
-    border-radius:10px;
-    background:#292724;
-    color:#ffffff !important;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    font-size:18px;
-    ">
-        ✦
-    </div>
-
-    <div style="
-    font-size:17px;
-    font-weight:600;
-    color:#292724 !important;
-    ">
-        AI Document Intelligence
-    </div>
-
-</div>
-        """,
-        unsafe_allow_html=True
+        "### ✦ AI Document Intelligence"
     )
 
     if st.button(
@@ -1475,8 +1320,8 @@ margin-bottom:18px;
             )
 
     user_chats.sort(
-        key=lambda item:
-        item[1].get(
+        key=lambda x:
+        x[1].get(
             "updated_at",
             ""
         ),
@@ -1486,31 +1331,29 @@ margin-bottom:18px;
     if not user_chats:
 
         st.caption(
-            "Your conversations will appear here."
+            "No conversations yet."
         )
 
-    else:
+    for chat_id, chat in user_chats:
 
-        for chat_id, chat in user_chats:
+        title = chat.get(
+            "title",
+            "New Chat"
+        )
 
-            title = chat.get(
-                "title",
-                "New Chat"
+        if len(title) > 32:
+
+            title = title[:32] + "..."
+
+        if st.button(
+            "▸ " + title,
+            key=f"chat_{chat_id}",
+            use_container_width=True
+        ):
+
+            load_chat(
+                chat_id
             )
-
-            if len(title) > 32:
-
-                title = title[:32] + "..."
-
-            if st.button(
-                "▸ " + title,
-                key=f"chat_{chat_id}",
-                use_container_width=True
-            ):
-
-                load_chat(
-                    chat_id
-                )
 
     st.divider()
 
@@ -1534,27 +1377,12 @@ margin-bottom:18px;
 
     st.markdown(
         f"""
-<div class="usage-card">
-
-Requests:
-<b>{user_usage.get("requests", 0)}</b>
-
-<br>
-
-Input tokens:
-<b>{user_usage.get("input_tokens", 0)}</b>
-
-<br>
-
-Output tokens:
-<b>{user_usage.get("output_tokens", 0)}</b>
-
-<br>
-
-Total tokens:
-<b>{user_usage.get("total_tokens", 0)}</b>
-
-</div>
+        <div class="usage-card">
+        Requests: <b>{user_usage.get("requests", 0)}</b><br>
+        Input: <b>{user_usage.get("input_tokens", 0)}</b><br>
+        Output: <b>{user_usage.get("output_tokens", 0)}</b><br>
+        Total: <b>{user_usage.get("total_tokens", 0)}</b>
+        </div>
         """,
         unsafe_allow_html=True
     )
@@ -1566,7 +1394,7 @@ Total tokens:
     # ========================================================
 
     if st.button(
-        "⚙  Settings",
+        "⚙ Settings",
         use_container_width=True
     ):
 
@@ -1594,83 +1422,50 @@ Total tokens:
 # HEADER
 # ============================================================
 
-username_display = html.escape(
-    st.session_state.username
-)
-
 st.markdown(
-    f"""
-<div class="app-header">
-
-    <div class="app-header-left">
-
-        <div class="app-logo">
-            ✦
+    """
+    <div class="app-header">
+        <div class="app-title">
+            ✦ AI Document Intelligence
         </div>
 
-        <div>
-
-            <div class="app-title">
-                AI Document Intelligence
-            </div>
-
-            <div class="app-status">
-                ● Ready
-            </div>
-
+        <div class="app-subtitle">
+            Document & Website Assistant
         </div>
-
     </div>
-
-    <div class="app-status">
-        {username_display}
-    </div>
-
-</div>
     """,
     unsafe_allow_html=True
 )
 
 
 # ============================================================
-# SETTINGS PANEL
+# SETTINGS
 # ============================================================
 
 if st.session_state.show_settings:
 
     st.markdown(
-        """
-<div class="settings-card">
+        "### ⚙ Chat Settings"
+    )
 
-    <div class="settings-title">
-        ⚙ Chat Settings
-    </div>
-
-</div>
-        """,
+    st.markdown(
+        '<div class="settings-box">',
         unsafe_allow_html=True
     )
 
-    col1, col2 = st.columns(2)
-
-    with col1:
-
-        st.selectbox(
-            "Theme",
-            ["Warm Light"],
-            key="theme_select"
-        )
-
-    with col2:
-
-        st.session_state.response_length = st.selectbox(
-            "Maximum response tokens",
-            [50, 100, 150, 200],
-            index=1
-        )
+    st.session_state.response_length = st.selectbox(
+        "Maximum response tokens",
+        [50, 100, 150, 200],
+        index=1
+    )
 
     st.caption(
-        "Lower token limits generally produce shorter responses."
+        "This controls the maximum length of the AI response."
+    )
+
+    st.markdown(
+        '</div>',
+        unsafe_allow_html=True
     )
 
 
@@ -1679,14 +1474,11 @@ if st.session_state.show_settings:
 # ============================================================
 
 with st.expander(
-    "📎  Add a document or website",
-    expanded=not bool(
-        st.session_state.document_text
-    )
+    "📎 Add a document or website"
 ):
 
     source = st.radio(
-        "Choose source",
+        "Source",
         [
             "Document",
             "Website URL"
@@ -1701,7 +1493,7 @@ with st.expander(
     if source == "Document":
 
         uploaded_file = st.file_uploader(
-            "Upload your document",
+            "Upload PDF, TXT, DOCX or XLSX",
             type=[
                 "pdf",
                 "txt",
@@ -1710,7 +1502,7 @@ with st.expander(
             ]
         )
 
-        if uploaded_file is not None:
+        if uploaded_file:
 
             if (
                 uploaded_file.name
@@ -1718,7 +1510,7 @@ with st.expander(
             ):
 
                 with st.spinner(
-                    "Reading your document..."
+                    "Reading document..."
                 ):
 
                     try:
@@ -1756,7 +1548,7 @@ with st.expander(
                         else:
 
                             st.error(
-                                "Unsupported file type."
+                                "Unsupported file."
                             )
 
                             st.stop()
@@ -1764,7 +1556,7 @@ with st.expander(
                         if not text.strip():
 
                             st.error(
-                                "The document contains no readable text."
+                                "No readable text found."
                             )
 
                         else:
@@ -1792,7 +1584,7 @@ with st.expander(
                     except Exception as error:
 
                         st.error(
-                            f"Error reading document: {error}"
+                            f"Error: {error}"
                         )
 
     # ========================================================
@@ -1814,7 +1606,7 @@ with st.expander(
             if not url.strip():
 
                 st.warning(
-                    "Please enter a website URL."
+                    "Please enter a URL."
                 )
 
             else:
@@ -1832,7 +1624,7 @@ with st.expander(
                         if not text.strip():
 
                             st.error(
-                                "No readable text was found."
+                                "No readable text found."
                             )
 
                         else:
@@ -1865,20 +1657,16 @@ with st.expander(
 
 
 # ============================================================
-# SOURCE BADGE
+# SOURCE
 # ============================================================
 
 if st.session_state.document_text:
 
-    source_name = html.escape(
-        st.session_state.document_name
-    )
-
     st.markdown(
         f"""
-<span class="source-badge">
-    📄 {source_name}
-</span>
+        <div class="source-badge">
+            📄 {st.session_state.document_name}
+        </div>
         """,
         unsafe_allow_html=True
     )
@@ -1892,104 +1680,60 @@ if not st.session_state.messages:
 
     greeting = get_greeting()
 
-    username = html.escape(
-        st.session_state.username
-    )
-
     st.markdown(
         f"""
-<div class="welcome">
+        <div class="welcome">
 
-    <div class="welcome-logo">
-        ✦
-    </div>
+            <div class="welcome-symbol">
+                ✦
+            </div>
 
-    <div class="welcome-title">
-        {greeting}, {username}
-    </div>
+            <div class="welcome-title">
+                {greeting}, {st.session_state.username}
+            </div>
 
-    <div class="welcome-text">
-        What would you like to know?
-    </div>
+            <div class="welcome-text">
+                What would you like to know?
+            </div>
 
-</div>
+        </div>
         """,
         unsafe_allow_html=True
     )
 
 
 # ============================================================
-# CHAT HISTORY
+# DISPLAY CHAT
 # ============================================================
 
 for message in st.session_state.messages:
 
-    role = message.get(
-        "role",
-        ""
-    )
+    if message["role"] == "user":
 
-    content = message.get(
-        "content",
-        ""
-    )
+        with st.chat_message("user"):
 
-    safe_content = (
-        html.escape(content)
-        .replace(
-            "\n",
-            "<br>"
-        )
-    )
+            st.markdown(
+                message["content"]
+            )
 
-    if role == "user":
+    else:
 
-        st.markdown(
-            f"""
-<div class="user-message-row">
+        with st.chat_message("assistant"):
 
-    <div class="user-message">
-        {safe_content}
-    </div>
-
-</div>
-            """,
-            unsafe_allow_html=True
-        )
-
-    elif role == "assistant":
-
-        st.markdown(
-            f"""
-<div class="ai-message-row">
-
-    <div class="ai-message">
-
-        <div class="ai-label">
-            ✦ AI
-        </div>
-
-        <div>
-            {safe_content}
-        </div>
-
-    </div>
-
-</div>
-            """,
-            unsafe_allow_html=True
-        )
+            st.markdown(
+                message["content"]
+            )
 
 
 # ============================================================
-# TOKEN LIMIT NEAR CHAT BOX
+# TOKEN INFORMATION
 # ============================================================
 
 st.markdown(
     f"""
-<div class="composer-info">
-    Max response: {st.session_state.response_length} tokens
-</div>
+    <div class="token-info">
+        Max response: {st.session_state.response_length} tokens
+    </div>
     """,
     unsafe_allow_html=True
 )
@@ -2005,7 +1749,7 @@ prompt = st.chat_input(
 
 
 # ============================================================
-# ASK AI
+# PROCESS QUESTION
 # ============================================================
 
 if prompt:
@@ -2016,75 +1760,73 @@ if prompt:
 
         st.stop()
 
+    # ========================================================
+    # USER MESSAGE
+    # ========================================================
+
+    st.session_state.messages.append(
+        {
+            "role": "user",
+            "content": prompt,
+            "tokens": 0
+        }
+    )
+
+    # ========================================================
+    # AI
+    # ========================================================
+
     with st.spinner(
         "Thinking..."
     ):
-
-        # ====================================================
-        # LOAD MODEL
-        # ====================================================
 
         try:
 
             tokenizer, generator = load_llm()
 
-        except Exception as error:
-
-            st.error(
-                f"Could not load AI model: {error}"
+            input_tokens = count_tokens(
+                tokenizer,
+                prompt
             )
 
-            st.stop()
+            # =================================================
+            # RETRIEVE CONTEXT
+            # =================================================
 
-        # ====================================================
-        # INPUT TOKENS
-        # ====================================================
+            context = ""
 
-        input_tokens = count_tokens(
-            tokenizer,
-            prompt
-        )
+            if st.session_state.retriever:
 
-        # ====================================================
-        # RETRIEVE DOCUMENT CONTEXT
-        # ====================================================
+                try:
 
-        context = ""
+                    documents = (
+                        st.session_state.retriever
+                        .invoke(prompt)
+                    )
 
-        if st.session_state.retriever:
+                    context = "\n\n".join(
+                        doc.page_content
+                        for doc in documents
+                    )
 
-            try:
+                except Exception:
 
-                documents = (
-                    st.session_state.retriever
-                    .invoke(prompt)
-                )
+                    context = ""
 
-                context = "\n\n".join(
-                    document.page_content
-                    for document in documents
-                )
+            # =================================================
+            # RAG PROMPT
+            # =================================================
 
-            except Exception:
+            if context:
 
-                context = ""
-
-        # ====================================================
-        # PROMPT
-        # ====================================================
-
-        if context:
-
-            final_prompt = f"""
+                final_prompt = f"""
 You are an AI document assistant.
 
-Answer the user's question using ONLY the
-information provided in the context.
+Use ONLY the context below to answer.
 
 Do not invent information.
 
-If the answer is not available in the context,
-say:
+If the answer is not available, say:
 
 "I could not find that information in the document."
 
@@ -2097,12 +1839,12 @@ Question:
 Answer:
 """
 
-        else:
+            else:
 
-            final_prompt = f"""
+                final_prompt = f"""
 You are a helpful AI assistant.
 
-Answer the user's question clearly and briefly.
+Answer the question clearly and briefly.
 
 Question:
 {prompt}
@@ -2110,11 +1852,9 @@ Question:
 Answer:
 """
 
-        # ====================================================
-        # GENERATE ANSWER
-        # ====================================================
-
-        try:
+            # =================================================
+            # GENERATE
+            # =================================================
 
             result = generator(
                 final_prompt,
@@ -2138,52 +1878,30 @@ Answer:
                     "I could not generate an answer."
                 )
 
+            output_tokens = count_tokens(
+                tokenizer,
+                answer
+            )
+
+            total_tokens = (
+                input_tokens
+                + output_tokens
+            )
+
         except Exception as error:
+
+            input_tokens = 0
+
+            output_tokens = 0
+
+            total_tokens = 0
 
             answer = (
                 f"Sorry, I encountered an error: {error}"
             )
 
-        # ====================================================
-        # OUTPUT TOKENS
-        # ====================================================
-
-        output_tokens = count_tokens(
-            tokenizer,
-            answer
-        )
-
-        total_tokens = (
-            input_tokens
-            + output_tokens
-        )
-
     # ========================================================
-    # SAVE USER MESSAGE
-    # ========================================================
-
-    st.session_state.messages.append(
-        {
-            "role": "user",
-            "content": prompt,
-            "tokens": input_tokens
-        }
-    )
-
-    # ========================================================
-    # SAVE AI MESSAGE
-    # ========================================================
-
-    st.session_state.messages.append(
-        {
-            "role": "assistant",
-            "content": answer,
-            "tokens": output_tokens
-        }
-    )
-
-    # ========================================================
-    # USAGE
+    # UPDATE USER TOKEN COUNT
     # ========================================================
 
     username = st.session_state.username
@@ -2191,13 +1909,9 @@ Answer:
     if username not in usage:
 
         usage[username] = {
-
             "input_tokens": 0,
-
             "output_tokens": 0,
-
             "total_tokens": 0,
-
             "requests": 0
         }
 
@@ -2218,6 +1932,18 @@ Answer:
     save_json(
         USAGE_FILE,
         usage
+    )
+
+    # ========================================================
+    # SAVE AI MESSAGE
+    # ========================================================
+
+    st.session_state.messages.append(
+        {
+            "role": "assistant",
+            "content": answer,
+            "tokens": output_tokens
+        }
     )
 
     # ========================================================
