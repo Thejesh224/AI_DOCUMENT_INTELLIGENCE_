@@ -127,7 +127,6 @@ h6 {
 
 section[data-testid="stSidebar"] {
     background-color: #171614 !important;
-
     border-right: 1px solid #34312c !important;
 }
 
@@ -148,19 +147,14 @@ section[data-testid="stSidebar"] label {
 
 section[data-testid="stSidebar"] button {
     background-color: transparent !important;
-
     color: #ddd8cf !important;
-
     border: 1px solid transparent !important;
-
     border-radius: 9px !important;
-
     text-align: left !important;
 }
 
 section[data-testid="stSidebar"] button:hover {
     background-color: #292722 !important;
-
     border-color: #3a3731 !important;
 }
 
@@ -171,25 +165,19 @@ section[data-testid="stSidebar"] button:hover {
 
 .app-header {
     padding-bottom: 16px;
-
     border-bottom: 1px solid #36332e;
-
     margin-bottom: 25px;
 }
 
 .app-title {
     font-size: 19px;
-
     font-weight: 600;
-
     color: #f4f0e8 !important;
 }
 
 .app-subtitle {
     font-size: 12px;
-
     color: #969087 !important;
-
     margin-top: 3px;
 }
 
@@ -200,29 +188,21 @@ section[data-testid="stSidebar"] button:hover {
 
 .login-container {
     max-width: 460px;
-
     margin: 100px auto 0 auto;
 }
 
 .login-title {
     text-align: center;
-
     font-size: 32px;
-
     font-weight: 650;
-
     color: #f5f1e9 !important;
-
     margin-bottom: 8px;
 }
 
 .login-subtitle {
     text-align: center;
-
     font-size: 14px;
-
     color: #9b958b !important;
-
     margin-bottom: 35px;
 }
 
@@ -233,7 +213,6 @@ section[data-testid="stSidebar"] button:hover {
 
 button[data-baseweb="tab"] {
     color: #9e988e !important;
-
     background: transparent !important;
 }
 
@@ -252,11 +231,8 @@ button[data-baseweb="tab"][aria-selected="true"] {
 
 .stTextInput input {
     background-color: #292824 !important;
-
     color: #f4f0e8 !important;
-
     border: 1px solid #48443d !important;
-
     border-radius: 10px !important;
 }
 
@@ -266,7 +242,6 @@ button[data-baseweb="tab"][aria-selected="true"] {
 
 .stTextInput input:focus {
     border-color: #b6aea2 !important;
-
     box-shadow: none !important;
 }
 
@@ -276,23 +251,33 @@ button[data-baseweb="tab"][aria-selected="true"] {
 ========================================================== */
 
 .stButton button {
-    background-color: #e8e2d8 !important;
+    background-color: #d97757 !important;
 
-    color: #25231f !important;
+    color: #ffffff !important;
 
     border: none !important;
 
     border-radius: 9px !important;
 
-    min-height: 42px !important;
+    min-height: 44px !important;
 
     font-weight: 600 !important;
+
+    transition: all 0.2s ease !important;
 }
 
 .stButton button:hover {
-    background-color: #f1ebe1 !important;
+    background-color: #e48768 !important;
 
-    color: #1d1b18 !important;
+    color: #ffffff !important;
+
+    border: none !important;
+}
+
+.stButton button:active {
+    background-color: #c9684b !important;
+
+    color: #ffffff !important;
 }
 
 
@@ -302,11 +287,8 @@ button[data-baseweb="tab"][aria-selected="true"] {
 
 [data-testid="stFileUploader"] {
     background-color: #272521 !important;
-
     border: 1px solid #3d3933 !important;
-
     border-radius: 12px !important;
-
     padding: 10px !important;
 }
 
@@ -321,9 +303,7 @@ button[data-baseweb="tab"][aria-selected="true"] {
 
 [data-testid="stExpander"] {
     background-color: #24231f !important;
-
     border: 1px solid #3b3832 !important;
-
     border-radius: 12px !important;
 }
 
@@ -338,7 +318,6 @@ button[data-baseweb="tab"][aria-selected="true"] {
 
 div[data-baseweb="select"] {
     background-color: #292824 !important;
-
     border-radius: 9px !important;
 }
 
@@ -357,33 +336,25 @@ div[data-testid="stRadio"] label {
 
 .welcome {
     text-align: center;
-
     padding-top: 125px;
-
     padding-bottom: 70px;
 }
 
 .welcome-symbol {
     font-size: 34px;
-
     margin-bottom: 20px;
-
     color: #eee7dc !important;
 }
 
 .welcome-title {
     font-size: 30px;
-
     font-weight: 600;
-
     color: #f4f0e8 !important;
-
     margin-bottom: 8px;
 }
 
 .welcome-text {
     font-size: 15px;
-
     color: #969087 !important;
 }
 
@@ -394,19 +365,12 @@ div[data-testid="stRadio"] label {
 
 .source-badge {
     display: inline-block;
-
     background-color: #2b2925;
-
     border: 1px solid #3b3832;
-
     color: #b9b1a6 !important;
-
     border-radius: 20px;
-
     padding: 5px 11px;
-
     font-size: 11px;
-
     margin-bottom: 12px;
 }
 
@@ -417,19 +381,12 @@ div[data-testid="stRadio"] label {
 
 .user-message {
     background-color: #34312b !important;
-
     color: #f1ece4 !important;
-
     padding: 12px 16px;
-
     border-radius: 18px 18px 5px 18px;
-
     margin: 18px 0 18px auto;
-
     max-width: 72%;
-
     line-height: 1.6;
-
     font-size: 15px;
 }
 
@@ -440,25 +397,17 @@ div[data-testid="stRadio"] label {
 
 .ai-message {
     background-color: transparent !important;
-
     color: #e8e2d9 !important;
-
     max-width: 85%;
-
     line-height: 1.75;
-
     font-size: 15px;
-
     margin: 25px 0;
 }
 
 .ai-label {
     color: #a59e94 !important;
-
     font-size: 12px;
-
     font-weight: 600;
-
     margin-bottom: 6px;
 }
 
@@ -473,19 +422,14 @@ div[data-testid="stRadio"] label {
 
 [data-testid="stChatInput"] > div {
     background-color: #292824 !important;
-
     border: 1px solid #48443d !important;
-
     border-radius: 18px !important;
-
     box-shadow: 0 5px 25px rgba(0, 0, 0, 0.25) !important;
 }
 
 [data-testid="stChatInput"] textarea {
     background-color: #292824 !important;
-
     color: #f4efe7 !important;
-
     border: none !important;
 }
 
@@ -500,13 +444,9 @@ div[data-testid="stRadio"] label {
 
 .token-info {
     text-align: right;
-
     color: #817b72 !important;
-
     font-size: 11px;
-
     margin-bottom: 5px;
-
     padding-right: 8px;
 }
 
@@ -517,17 +457,11 @@ div[data-testid="stRadio"] label {
 
 .usage-card {
     background-color: #25231f;
-
     border: 1px solid #37342e;
-
     border-radius: 10px;
-
     padding: 12px;
-
     color: #aaa39a !important;
-
     font-size: 12px;
-
     line-height: 1.8;
 }
 
@@ -538,13 +472,9 @@ div[data-testid="stRadio"] label {
 
 .settings-box {
     background-color: #25231f;
-
     border: 1px solid #3a3731;
-
     border-radius: 12px;
-
     padding: 16px;
-
     margin-bottom: 20px;
 }
 
@@ -674,17 +604,16 @@ for key, value in defaults.items():
 def count_tokens(tokenizer, text):
 
     if not text:
-
         return 0
 
     try:
 
-        return len(
-            tokenizer.encode(
-                text,
-                add_special_tokens=True
-            )
+        tokens = tokenizer.encode(
+            text,
+            add_special_tokens=True
         )
+
+        return len(tokens)
 
     except Exception:
 
@@ -1204,7 +1133,9 @@ if not st.session_state.logged_in:
     )
 
     st.markdown(
-        '<div class="login-title">AI Document Intelligence</div>',
+        '<div class="login-title">'
+        'AI Document Intelligence'
+        '</div>',
         unsafe_allow_html=True
     )
 
@@ -1425,6 +1356,7 @@ with st.sidebar:
 st.markdown(
     """
     <div class="app-header">
+
         <div class="app-title">
             ✦ AI Document Intelligence
         </div>
@@ -1432,6 +1364,7 @@ st.markdown(
         <div class="app-subtitle">
             Document & Website Assistant
         </div>
+
     </div>
     """,
     unsafe_allow_html=True
