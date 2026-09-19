@@ -1,19 +1,21 @@
 # ============================================================
 # AI DOCUMENT INTELLIGENCE SYSTEM
-# LOGIN + MULTI-FILE RAG + CHATGPT STYLE HISTORY
+# RAG + FAISS + HuggingFace + Chat History
+# PDF + TXT + DOCX + XLSX
 # ============================================================
 
 import os
 import json
 import uuid
 import tempfile
-from datetime import datetime
 
 import streamlit as st
+import pandas as pd
+
 from dotenv import load_dotenv
 
 # ============================================================
-# PAGE CONFIG
+# STREAMLIT CONFIG
 # ============================================================
 
 st.set_page_config(
@@ -25,20 +27,16 @@ st.set_page_config(
 load_dotenv()
 
 # ============================================================
-# LANGCHAIN IMPORTS
+# IMPORTS
 # ============================================================
 
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
-from langchain_core.documents import Document
+from langchain.schema import Document
 
-# ============================================================
-# TRANSFORMERS
-# ============================================================
-
-from transformers import pipeline
+from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
 
 
 # ============================================================
@@ -50,30 +48,27 @@ CHAT_FILE = "chats.json"
 
 
 # ============================================================
-# USER FUNCTIONS
+# USER STORAGE
 # ============================================================
 
 def load_users():
 
     if not os.path.exists(USER_FILE):
-
         data = {
             "users": {},
             "count": 0
         }
 
-        with open(USER_FILE, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=4)
+        with open(USER_FILE, "w") as f:
+            json.dump(data, f, indent=2)
 
         return data
 
     try:
-
-        with open(USER_FILE, "r", encoding="utf-8") as f:
+        with open(USER_FILE, "r") as f:
             data = json.load(f)
 
     except Exception:
-
         data = {
             "users": {},
             "count": 0
@@ -87,178 +82,56 @@ def load_users():
 
 def save_users(data):
 
-    with open(USER_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=4)
+    with open(USER_FILE, "w") as f:
+        json.dump(data, f, indent=2)
 
 
 # ============================================================
-# CHAT HISTORY FUNCTIONS
+# CHAT STORAGE
 # ============================================================
 
 def load_chats():
 
     if not os.path.exists(CHAT_FILE):
-
-        data = {
-            "users": {}
-        }
-
-        with open(CHAT_FILE, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=4)
-
-        return data
+        return {}
 
     try:
-
-        with open(CHAT_FILE, "r", encoding="utf-8") as f:
-            data = json.load(f)
+        with open(CHAT_FILE, "r") as f:
+            return json.load(f)
 
     except Exception:
-
-        data = {
-            "users": {}
-        }
-
-    data.setdefault("users", {})
-
-    return data
+        return {}
 
 
 def save_chats(data):
 
-    with open(CHAT_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=4)
-
-
-def create_chat(username):
-
-    chats = load_chats()
-
-    if username not in chats["users"]:
-        chats["users"][username] = []
-
-    chat_id = str(uuid.uuid4())
-
-    chat = {
-        "id": chat_id,
-        "title": "New Chat",
-        "created_at": datetime.now().strftime(
-            "%Y-%m-%d %H:%M:%S"
-        ),
-        "updated_at": datetime.now().strftime(
-            "%Y-%m-%d %H:%M:%S"
-        ),
-        "messages": [],
-        "documents": []
-    }
-
-    chats["users"][username].insert(0, chat)
-
-    save_chats(chats)
-
-    return chat_id
-
-
-def get_user_chats(username):
-
-    chats = load_chats()
-
-    return chats["users"].get(username, [])
-
-
-def get_chat(username, chat_id):
-
-    user_chats = get_user_chats(username)
-
-    for chat in user_chats:
-
-        if chat["id"] == chat_id:
-            return chat
-
-    return None
-
-
-def update_chat(
-    username,
-    chat_id,
-    messages=None,
-    documents=None,
-    title=None
-):
-
-    chats = load_chats()
-
-    user_chats = chats["users"].get(username, [])
-
-    for chat in user_chats:
-
-        if chat["id"] == chat_id:
-
-            if messages is not None:
-                chat["messages"] = messages
-
-            if documents is not None:
-                chat["documents"] = documents
-
-            if title is not None:
-                chat["title"] = title
-
-            chat["updated_at"] = datetime.now().strftime(
-                "%Y-%m-%d %H:%M:%S"
-            )
-
-            break
-
-    # Put recently updated chat first
-    user_chats.sort(
-        key=lambda x: x.get("updated_at", ""),
-        reverse=True
-    )
-
-    save_chats(chats)
-
-
-def delete_chat(username, chat_id):
-
-    chats = load_chats()
-
-    if username not in chats["users"]:
-        return
-
-    chats["users"][username] = [
-        chat
-        for chat in chats["users"][username]
-        if chat["id"] != chat_id
-    ]
-
-    save_chats(chats)
+    with open(CHAT_FILE, "w") as f:
+        json.dump(data, f, indent=2)
 
 
 # ============================================================
 # SESSION STATE
 # ============================================================
 
-if "logged_in" not in st.session_state:
-    st.session_state.logged_in = False
+defaults = {
+    "logged_in": False,
+    "username": "",
+    "current_chat_id": None,
+    "messages": [],
+    "retriever": None,
+    "document_text": "",
+    "document_name": "",
+    "chat_loaded": False
+}
 
-if "username" not in st.session_state:
-    st.session_state.username = ""
+for key, value in defaults.items():
 
-if "current_chat_id" not in st.session_state:
-    st.session_state.current_chat_id = None
-
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-
-if "retriever" not in st.session_state:
-    st.session_state.retriever = None
-
-if "documents_loaded" not in st.session_state:
-    st.session_state.documents_loaded = False
+    if key not in st.session_state:
+        st.session_state[key] = value
 
 
 # ============================================================
-# CACHED EMBEDDINGS
+# EMBEDDINGS
 # ============================================================
 
 @st.cache_resource
@@ -270,119 +143,57 @@ def load_embeddings():
 
 
 # ============================================================
-# CACHED LLM
+# AI MODEL
 # ============================================================
 
 @st.cache_resource
 def load_llm():
 
-    return pipeline(
-        "text2text-generation",
-        model="google/flan-t5-small",
-        max_new_tokens=150,
-        do_sample=False
+    model_name = "HuggingFaceTB/SmolLM2-360M-Instruct"
+
+    tokenizer = AutoTokenizer.from_pretrained(
+        model_name
     )
+
+    model = AutoModelForCausalLM.from_pretrained(
+        model_name
+    )
+
+    generator = pipeline(
+        "text-generation",
+        model=model,
+        tokenizer=tokenizer,
+        max_new_tokens=200,
+        do_sample=False,
+        return_full_text=False,
+        pad_token_id=tokenizer.eos_token_id
+    )
+
+    return generator
 
 
 # ============================================================
-# LOAD MODELS
+# AUTHENTICATION
 # ============================================================
 
-try:
-
-    embeddings = load_embeddings()
-
-except Exception as e:
-
-    st.error(
-        "Could not load the embedding model."
-    )
-
-    st.exception(e)
-
-    st.stop()
-
-
-try:
-
-    llm = load_llm()
-
-except Exception as e:
-
-    st.error(
-        "Could not load the AI model."
-    )
-
-    st.exception(e)
-
-    st.stop()
-
-
-# ============================================================
-# BUILD RETRIEVER FROM SAVED DOCUMENTS
-# ============================================================
-
-def build_retriever(documents):
-
-    if not documents:
-        return None
-
-    all_documents = []
-
-    for item in documents:
-
-        all_documents.append(
-            Document(
-                page_content=item["page_content"],
-                metadata=item.get("metadata", {})
-            )
-        )
-
-    splitter = RecursiveCharacterTextSplitter(
-        chunk_size=500,
-        chunk_overlap=100
-    )
-
-    chunks = splitter.split_documents(
-        all_documents
-    )
-
-    if not chunks:
-        return None
-
-    vectorstore = FAISS.from_documents(
-        chunks,
-        embeddings
-    )
-
-    return vectorstore.as_retriever(
-        search_kwargs={"k": 3}
-    )
-
-
-# ============================================================
-# AUTH PAGE
-# ============================================================
-
-def show_auth_page():
+def authentication_page():
 
     st.title("🔐 AI Document Intelligence")
 
     st.write(
-        "Login to access your document conversations."
+        "Login or create an account to use the document intelligence system."
     )
 
     option = st.radio(
         "Choose an option",
-        ["Login", "Create Account"],
-        horizontal=True
+        ["Login", "Create Account"]
     )
 
     data = load_users()
 
-    # ========================================================
+    # --------------------------------------------------------
     # LOGIN
-    # ========================================================
+    # --------------------------------------------------------
 
     if option == "Login":
 
@@ -399,7 +210,6 @@ def show_auth_page():
 
         if st.button(
             "Login",
-            type="primary",
             use_container_width=True
         ):
 
@@ -411,48 +221,13 @@ def show_auth_page():
                 st.session_state.logged_in = True
                 st.session_state.username = username
 
-                # --------------------------------------------
-                # Create first chat if user has none
-                # --------------------------------------------
+                st.session_state.current_chat_id = None
+                st.session_state.messages = []
+                st.session_state.retriever = None
+                st.session_state.document_text = ""
+                st.session_state.document_name = ""
 
-                user_chats = get_user_chats(username)
-
-                if not user_chats:
-
-                    chat_id = create_chat(username)
-
-                else:
-
-                    chat_id = user_chats[0]["id"]
-
-                st.session_state.current_chat_id = chat_id
-
-                # --------------------------------------------
-                # Load current chat
-                # --------------------------------------------
-
-                chat = get_chat(
-                    username,
-                    chat_id
-                )
-
-                st.session_state.messages = (
-                    chat.get("messages", [])
-                    if chat
-                    else []
-                )
-
-                st.session_state.retriever = (
-                    build_retriever(
-                        chat.get("documents", [])
-                    )
-                    if chat
-                    else None
-                )
-
-                st.session_state.documents_loaded = (
-                    st.session_state.retriever is not None
-                )
+                st.success("Login successful!")
 
                 st.rerun()
 
@@ -462,9 +237,9 @@ def show_auth_page():
                     "Invalid username or password."
                 )
 
-    # ========================================================
+    # --------------------------------------------------------
     # CREATE ACCOUNT
-    # ========================================================
+    # --------------------------------------------------------
 
     else:
 
@@ -481,16 +256,13 @@ def show_auth_page():
 
         if st.button(
             "Create Account",
-            type="primary",
             use_container_width=True
         ):
-
-            new_username = new_username.strip()
 
             if not new_username or not new_password:
 
                 st.warning(
-                    "Please fill in all fields."
+                    "Please fill all fields."
                 )
 
             elif new_username in data["users"]:
@@ -502,13 +274,9 @@ def show_auth_page():
             else:
 
                 data["users"][new_username] = new_password
-
                 data["count"] += 1
 
                 save_users(data)
-
-                # Create first chat for user
-                create_chat(new_username)
 
                 st.success(
                     "Account created successfully. Please login."
@@ -521,18 +289,29 @@ def show_auth_page():
 
 if not st.session_state.logged_in:
 
-    show_auth_page()
+    authentication_page()
 
     st.stop()
+
+
+# ============================================================
+# MAIN APP
+# ============================================================
+
+st.title("📄 AI Document Intelligence System")
+
+st.caption(
+    "Upload documents and ask questions using RAG and semantic search."
+)
 
 
 # ============================================================
 # SIDEBAR
 # ============================================================
 
-st.sidebar.title("💬 AI Chats")
+st.sidebar.title("💬 Chat History")
 
-st.sidebar.caption(
+st.sidebar.write(
     f"👤 {st.session_state.username}"
 )
 
@@ -546,144 +325,161 @@ if st.sidebar.button(
     use_container_width=True
 ):
 
-    chat_id = create_chat(
-        st.session_state.username
+    st.session_state.current_chat_id = str(
+        uuid.uuid4()
     )
 
-    st.session_state.current_chat_id = chat_id
     st.session_state.messages = []
+
     st.session_state.retriever = None
-    st.session_state.documents_loaded = False
+
+    st.session_state.document_text = ""
+
+    st.session_state.document_name = ""
+
+    st.session_state.chat_loaded = False
 
     st.rerun()
 
 
-st.sidebar.divider()
-
-
 # ============================================================
-# CHAT HISTORY
+# LOAD USER CHATS
 # ============================================================
 
-user_chats = get_user_chats(
-    st.session_state.username
+all_chats = load_chats()
+
+user_chats = []
+
+for chat_id, chat in all_chats.items():
+
+    if chat.get("username") == st.session_state.username:
+
+        user_chats.append(
+            (chat_id, chat)
+        )
+
+
+# Sort newest first
+user_chats.sort(
+    key=lambda x: x[1].get("updated_at", ""),
+    reverse=True
 )
 
 
-if user_chats:
+# ============================================================
+# DISPLAY CHAT HISTORY
+# ============================================================
 
-    st.sidebar.subheader("History")
+for chat_id, chat in user_chats:
 
-    for chat in user_chats:
+    title = chat.get(
+        "title",
+        "New Chat"
+    )
 
-        title = chat.get(
-            "title",
-            "New Chat"
+    if len(title) > 35:
+        title = title[:35] + "..."
+
+    if st.sidebar.button(
+        f"💬 {title}",
+        key=f"chat_{chat_id}",
+        use_container_width=True
+    ):
+
+        selected_chat = all_chats.get(
+            chat_id
         )
 
-        if len(title) > 32:
-            title = title[:32] + "..."
+        if selected_chat:
 
-        is_current = (
-            chat["id"]
-            == st.session_state.current_chat_id
-        )
+            st.session_state.current_chat_id = chat_id
 
-        button_text = (
-            "🟢 " + title
-            if is_current
-            else "💬 " + title
-        )
-
-        if st.sidebar.button(
-            button_text,
-            key="history_" + chat["id"],
-            use_container_width=True
-        ):
-
-            st.session_state.current_chat_id = (
-                chat["id"]
+            st.session_state.messages = selected_chat.get(
+                "messages",
+                []
             )
 
-            st.session_state.messages = (
-                chat.get("messages", [])
+            st.session_state.document_text = selected_chat.get(
+                "document_text",
+                ""
             )
 
-            st.session_state.retriever = (
-                build_retriever(
-                    chat.get("documents", [])
-                )
+            st.session_state.document_name = selected_chat.get(
+                "document_name",
+                ""
             )
 
-            st.session_state.documents_loaded = (
-                st.session_state.retriever is not None
-            )
+            st.session_state.chat_loaded = True
+
+            # Rebuild retriever
+            if st.session_state.document_text:
+
+                try:
+
+                    embeddings = load_embeddings()
+
+                    document = Document(
+                        page_content=st.session_state.document_text
+                    )
+
+                    splitter = RecursiveCharacterTextSplitter(
+                        chunk_size=1000,
+                        chunk_overlap=200
+                    )
+
+                    chunks = splitter.split_documents(
+                        [document]
+                    )
+
+                    vectorstore = FAISS.from_documents(
+                        chunks,
+                        embeddings
+                    )
+
+                    st.session_state.retriever = (
+                        vectorstore.as_retriever(
+                            search_kwargs={"k": 4}
+                        )
+                    )
+
+                except Exception as e:
+
+                    st.error(
+                        "Could not rebuild document search."
+                    )
+
+                    st.exception(e)
 
             st.rerun()
 
 
 # ============================================================
-# DELETE CHAT
+# DELETE CURRENT CHAT
 # ============================================================
 
-st.sidebar.divider()
-
-if st.sidebar.button(
-    "🗑️ Delete Current Chat",
-    use_container_width=True
+if (
+    st.session_state.current_chat_id
+    and st.session_state.current_chat_id in all_chats
 ):
 
-    current_id = st.session_state.current_chat_id
+    if st.sidebar.button(
+        "🗑️ Delete Current Chat",
+        use_container_width=True
+    ):
 
-    if current_id:
+        del all_chats[
+            st.session_state.current_chat_id
+        ]
 
-        delete_chat(
-            st.session_state.username,
-            current_id
-        )
+        save_chats(all_chats)
 
-    # --------------------------------------------
-    # Create replacement chat
-    # --------------------------------------------
-
-    remaining = get_user_chats(
-        st.session_state.username
-    )
-
-    if remaining:
-
-        new_current = remaining[0]
-
-        st.session_state.current_chat_id = (
-            new_current["id"]
-        )
-
-        st.session_state.messages = (
-            new_current.get("messages", [])
-        )
-
-        st.session_state.retriever = (
-            build_retriever(
-                new_current.get("documents", [])
-            )
-        )
-
-        st.session_state.documents_loaded = (
-            st.session_state.retriever is not None
-        )
-
-    else:
-
-        new_id = create_chat(
-            st.session_state.username
-        )
-
-        st.session_state.current_chat_id = new_id
+        st.session_state.current_chat_id = None
         st.session_state.messages = []
         st.session_state.retriever = None
-        st.session_state.documents_loaded = False
+        st.session_state.document_text = ""
+        st.session_state.document_name = ""
 
-    st.rerun()
+        st.rerun()
 
 
 # ============================================================
@@ -697,102 +493,75 @@ if st.sidebar.button(
 
     st.session_state.logged_in = False
     st.session_state.username = ""
+
     st.session_state.current_chat_id = None
     st.session_state.messages = []
+
     st.session_state.retriever = None
-    st.session_state.documents_loaded = False
+    st.session_state.document_text = ""
+    st.session_state.document_name = ""
 
     st.rerun()
 
 
 # ============================================================
-# MAIN PAGE
+# USER COUNT
 # ============================================================
 
-st.title(
-    "📄 AI Document Intelligence System"
+user_data = load_users()
+
+st.sidebar.divider()
+
+st.sidebar.write(
+    f"👥 Registered Users: {user_data.get('count', 0)}"
 )
-
-
-# ============================================================
-# CURRENT CHAT
-# ============================================================
-
-current_chat = get_chat(
-    st.session_state.username,
-    st.session_state.current_chat_id
-)
-
-if current_chat:
-
-    if current_chat["title"] != "New Chat":
-
-        st.caption(
-            "💬 " + current_chat["title"]
-        )
 
 
 # ============================================================
 # FILE UPLOAD
 # ============================================================
 
-st.subheader("📂 Upload Documents")
+st.subheader("📁 Upload Document")
 
-uploaded_files = st.file_uploader(
-    "Upload PDF, TXT, DOCX or Excel files",
+uploaded_file = st.file_uploader(
+    "Upload PDF, TXT, DOCX or XLSX",
     type=[
         "pdf",
         "txt",
         "docx",
         "xlsx"
-    ],
-    accept_multiple_files=True
+    ]
 )
 
 
 # ============================================================
-# PROCESS DOCUMENTS
+# PROCESS DOCUMENT
 # ============================================================
 
-if uploaded_files:
+if uploaded_file:
 
-    current_chat = get_chat(
-        st.session_state.username,
-        st.session_state.current_chat_id
-    )
-
-    existing_documents = (
-        current_chat.get("documents", [])
-        if current_chat
-        else []
-    )
-
-    # Only process new upload when current chat
-    # doesn't already contain documents
-
-    if not existing_documents:
-
-        all_docs = []
+    if (
+        st.session_state.document_name
+        != uploaded_file.name
+    ):
 
         with st.spinner(
-            "Processing your documents..."
+            "Processing document..."
         ):
 
-            for uploaded_file in uploaded_files:
+            try:
 
-                filename = uploaded_file.name
-
-                extension = (
-                    filename
+                file_type = (
+                    uploaded_file.name
                     .split(".")[-1]
                     .lower()
                 )
 
-                # ==========================================
+                # ------------------------------------------------
                 # PDF
-                # ==========================================
+                # ------------------------------------------------
 
-                if extension == "pdf":
+                if file_type == "pdf":
 
                     with tempfile.NamedTemporaryFile(
                         delete=False,
@@ -800,139 +569,128 @@ if uploaded_files:
                     ) as temp_file:
 
                         temp_file.write(
-                            uploaded_file.getvalue()
+                            uploaded_file.read()
                         )
 
                         pdf_path = temp_file.name
 
-                    try:
+                    loader = PyPDFLoader(
+                        pdf_path
+                    )
 
-                        loader = PyPDFLoader(
-                            pdf_path
-                        )
+                    docs = loader.load()
 
-                        docs = loader.load()
+                    os.remove(
+                        pdf_path
+                    )
 
-                    finally:
-
-                        if os.path.exists(pdf_path):
-                            os.remove(pdf_path)
-
-                # ==========================================
+                # ------------------------------------------------
                 # TXT
-                # ==========================================
+                # ------------------------------------------------
 
-                elif extension == "txt":
+                elif file_type == "txt":
 
-                    text = uploaded_file.getvalue().decode(
+                    text = uploaded_file.read().decode(
                         "utf-8",
                         errors="ignore"
                     )
 
                     docs = [
                         Document(
-                            page_content=text,
-                            metadata={}
+                            page_content=text
                         )
                     ]
 
-                # ==========================================
+                # ------------------------------------------------
                 # DOCX
-                # ==========================================
+                # ------------------------------------------------
 
-                elif extension == "docx":
+                elif file_type == "docx":
 
-                    from docx import Document as WordDocument
+                    from docx import Document as DocxDocument
 
-                    word_document = WordDocument(
+                    docx_file = DocxDocument(
                         uploaded_file
                     )
 
-                    paragraphs = [
-                        paragraph.text
-                        for paragraph in word_document.paragraphs
-                    ]
-
                     text = "\n".join(
-                        paragraphs
+                        paragraph.text
+                        for paragraph in docx_file.paragraphs
                     )
 
                     docs = [
                         Document(
-                            page_content=text,
-                            metadata={}
+                            page_content=text
                         )
                     ]
 
-                # ==========================================
+                # ------------------------------------------------
                 # XLSX
-                # ==========================================
+                # ------------------------------------------------
 
-                elif extension == "xlsx":
+                elif file_type == "xlsx":
 
-                    import pandas as pd
-
-                    dataframe = pd.read_excel(
+                    df = pd.read_excel(
                         uploaded_file
                     )
 
-                    text = dataframe.to_string(
+                    text = df.to_string(
                         index=False
                     )
 
                     docs = [
                         Document(
-                            page_content=text,
-                            metadata={}
+                            page_content=text
                         )
                     ]
 
                 else:
 
-                    continue
+                    st.error(
+                        "Unsupported file type."
+                    )
 
-                # ==========================================
-                # ADD SOURCE
-                # ==========================================
+                    st.stop()
 
-                for doc in docs:
+                # ------------------------------------------------
+                # SAVE DOCUMENT TEXT
+                # ------------------------------------------------
 
-                    doc.metadata["source"] = filename
+                document_text = "\n\n".join(
+                    doc.page_content
+                    for doc in docs
+                )
 
-                all_docs.extend(docs)
+                st.session_state.document_text = (
+                    document_text
+                )
 
-        # ==================================================
-        # CHECK DOCUMENTS
-        # ==================================================
+                st.session_state.document_name = (
+                    uploaded_file.name
+                )
 
-        if not all_docs:
+                # ------------------------------------------------
+                # SPLIT DOCUMENT
+                # ------------------------------------------------
 
-            st.error(
-                "No readable content was found."
-            )
+                splitter = RecursiveCharacterTextSplitter(
+                    chunk_size=1000,
+                    chunk_overlap=200
+                )
 
-        else:
+                chunks = splitter.split_documents(
+                    docs
+                )
 
-            # ==============================================
-            # SPLIT DOCUMENTS
-            # ==============================================
+                # ------------------------------------------------
+                # EMBEDDINGS
+                # ------------------------------------------------
 
-            splitter = RecursiveCharacterTextSplitter(
-                chunk_size=500,
-                chunk_overlap=100
-            )
+                embeddings = load_embeddings()
 
-            chunks = splitter.split_documents(
-                all_docs
-            )
-
-            # ==============================================
-            # CREATE VECTOR DATABASE
-            # ==============================================
-
-            with st.spinner(
-                "Creating document search index..."
-            ):
+                # ------------------------------------------------
+                # FAISS
+                # ------------------------------------------------
 
                 vectorstore = FAISS.from_documents(
                     chunks,
@@ -941,66 +699,50 @@ if uploaded_files:
 
                 st.session_state.retriever = (
                     vectorstore.as_retriever(
-                        search_kwargs={"k": 3}
+                        search_kwargs={
+                            "k": 4
+                        }
                     )
                 )
 
-            st.session_state.documents_loaded = True
+                st.session_state.messages = []
 
-            # ==============================================
-            # SAVE ORIGINAL DOCUMENTS
-            # ==============================================
-
-            saved_documents = []
-
-            for doc in all_docs:
-
-                saved_documents.append(
-                    {
-                        "page_content": doc.page_content,
-                        "metadata": doc.metadata
-                    }
+                st.success(
+                    f"✅ {uploaded_file.name} processed successfully!"
                 )
 
-            update_chat(
-                st.session_state.username,
-                st.session_state.current_chat_id,
-                documents=saved_documents
-            )
+            except Exception as e:
 
-            st.success(
-                "✅ Documents processed successfully!"
-            )
+                st.error(
+                    "Error while processing the document."
+                )
+
+                st.exception(e)
 
 
 # ============================================================
-# DISPLAY DOCUMENT STATUS
+# DOCUMENT STATUS
 # ============================================================
 
-if st.session_state.retriever:
-
-    st.success(
-        "📚 Documents are ready. You can ask questions below."
-    )
-
-else:
+if st.session_state.document_name:
 
     st.info(
-        "Upload a document to start asking questions."
+        f"📄 Current Document: "
+        f"{st.session_state.document_name}"
     )
 
 
 # ============================================================
-# CHAT SECTION
+# CHAT
 # ============================================================
 
 st.divider()
 
-st.subheader("💬 Chat")
+st.subheader("💬 Ask Questions")
 
 
 # ============================================================
-# DISPLAY HISTORY
+# DISPLAY PREVIOUS MESSAGES
 # ============================================================
 
 for message in st.session_state.messages:
@@ -1027,154 +769,22 @@ for message in st.session_state.messages:
 if st.session_state.retriever:
 
     question = st.chat_input(
-        "Ask something about your document..."
+        "Ask a question about your document..."
     )
 
     if question:
 
-        question = question.strip()
-
-        if not question:
-
-            st.warning(
-                "Please enter a question."
-            )
-
-            st.stop()
-
-        # ==============================================
-        # DISPLAY USER QUESTION
-        # ==============================================
+        # --------------------------------------------------------
+        # SHOW USER MESSAGE
+        # --------------------------------------------------------
 
         with st.chat_message("user"):
 
             st.write(question)
 
-        # ==============================================
-        # SEARCH DOCUMENT
-        # ==============================================
-
-        with st.spinner(
-            "Searching your document..."
-        ):
-
-            try:
-
-                documents = (
-                    st.session_state.retriever.invoke(
-                        question
-                    )
-                )
-
-            except Exception as e:
-
-                st.error(
-                    "There was a problem searching the document."
-                )
-
-                st.exception(e)
-
-                st.stop()
-
-        # ==============================================
-        # CREATE CONTEXT
-        # ==============================================
-
-        context_parts = []
-
-        for document in documents:
-
-            source = document.metadata.get(
-                "source",
-                "Document"
-            )
-
-            context_parts.append(
-                f"Source: {source}\n"
-                f"{document.page_content}"
-            )
-
-        context = "\n\n".join(
-            context_parts
-        )
-
-        # Limit context size
-        context = context[:4000]
-
-        # ==============================================
-        # PROMPT
-        # ==============================================
-
-        ai_prompt = f"""
-You are an AI document assistant.
-
-Answer the user's question using ONLY the information
-provided in the document context.
-
-If the answer cannot be found in the context,
-say:
-
-"I could not find that information in the uploaded document."
-
-Do not make up information.
-
-Document Context:
-{context}
-
-User Question:
-{question}
-
-Answer:
-"""
-
-        # ==============================================
-        # GENERATE ANSWER
-        # ==============================================
-
-        with st.spinner(
-            "Generating answer..."
-        ):
-
-            try:
-
-                result = llm(
-                    ai_prompt
-                )
-
-                if isinstance(result, list):
-
-                    answer = result[0].get(
-                        "generated_text",
-                        ""
-                    )
-
-                else:
-
-                    answer = str(result)
-
-                answer = answer.strip()
-
-            except Exception as e:
-
-                st.error(
-                    "The AI model could not generate a response."
-                )
-
-                st.exception(e)
-
-                st.stop()
-
-        # ==============================================
-        # DISPLAY ANSWER
-        # ==============================================
-
-        with st.chat_message("assistant"):
-
-            st.write(answer)
-
-        # ==============================================
-        # SAVE MESSAGES IN SESSION
-        # ==============================================
+        # --------------------------------------------------------
+        # SAVE USER MESSAGE
+        # --------------------------------------------------------
 
         st.session_state.messages.append(
             {
@@ -1183,6 +793,116 @@ Answer:
             }
         )
 
+        # --------------------------------------------------------
+        # SEARCH DOCUMENT
+        # --------------------------------------------------------
+
+        with st.spinner(
+            "Searching the document..."
+        ):
+
+            try:
+
+                docs = (
+                    st.session_state
+                    .retriever
+                    .invoke(question)
+                )
+
+                context = "\n\n".join(
+                    doc.page_content
+                    for doc in docs
+                )
+
+            except Exception as e:
+
+                st.error(
+                    "Error while searching the document."
+                )
+
+                st.exception(e)
+
+                st.stop()
+
+        # --------------------------------------------------------
+        # CREATE RAG PROMPT
+        # --------------------------------------------------------
+
+        prompt = f"""
+You are a document question-answering assistant.
+
+Answer the user's question using ONLY the information
+provided in the document context below.
+
+If the answer is not available in the document,
+say:
+
+"I could not find that information in the uploaded document."
+
+Do not make up information.
+
+DOCUMENT CONTEXT:
+{context}
+
+USER QUESTION:
+{question}
+
+ANSWER:
+"""
+
+        # --------------------------------------------------------
+        # LOAD AI MODEL
+        # --------------------------------------------------------
+
+        with st.spinner(
+            "AI is generating the answer..."
+        ):
+
+            try:
+
+                llm = load_llm()
+
+                result = llm(
+                    prompt
+                )
+
+                answer = result[0][
+                    "generated_text"
+                ].strip()
+
+                if not answer:
+
+                    answer = (
+                        "I could not generate an answer."
+                    )
+
+            except Exception as e:
+
+                answer = (
+                    "The AI model could not be loaded. "
+                    "Please try again."
+                )
+
+                st.error(
+                    "AI model error"
+                )
+
+                st.exception(e)
+
+        # --------------------------------------------------------
+        # SHOW ANSWER
+        # --------------------------------------------------------
+
+        with st.chat_message(
+            "assistant"
+        ):
+
+            st.write(answer)
+
+        # --------------------------------------------------------
+        # SAVE ASSISTANT MESSAGE
+        # --------------------------------------------------------
+
         st.session_state.messages.append(
             {
                 "role": "assistant",
@@ -1190,46 +910,79 @@ Answer:
             }
         )
 
-        # ==============================================
-        # GET CURRENT CHAT
-        # ==============================================
+        # ========================================================
+        # SAVE CHAT
+        # ========================================================
 
-        current_chat = get_chat(
-            st.session_state.username,
+        all_chats = load_chats()
+
+        # Create chat if necessary
+        if not st.session_state.current_chat_id:
+
+            st.session_state.current_chat_id = str(
+                uuid.uuid4()
+            )
+
+        chat_id = (
             st.session_state.current_chat_id
         )
 
-        # ==============================================
-        # AUTOMATIC TITLE
-        # ==============================================
+        # Create title from first question
+        title = question.strip()
 
-        title = None
+        if len(title) > 45:
 
-        if (
-            current_chat
-            and current_chat.get("title")
-            == "New Chat"
-        ):
+            title = title[:45] + "..."
 
-            title = question
+        # Existing chat
+        if chat_id in all_chats:
 
-            if len(title) > 40:
+            all_chats[chat_id]["messages"] = (
+                st.session_state.messages
+            )
 
-                title = title[:40] + "..."
+            all_chats[chat_id]["document_text"] = (
+                st.session_state.document_text
+            )
 
-        # ==============================================
-        # SAVE CHAT
-        # ==============================================
+            all_chats[chat_id]["document_name"] = (
+                st.session_state.document_name
+            )
 
-        update_chat(
-            st.session_state.username,
-            st.session_state.current_chat_id,
-            messages=st.session_state.messages,
-            title=title
+            all_chats[chat_id]["updated_at"] = (
+                str(__import__("datetime").datetime.now())
+            )
+
+        # New chat
+        else:
+
+            all_chats[chat_id] = {
+
+                "username":
+                    st.session_state.username,
+
+                "title":
+                    title,
+
+                "messages":
+                    st.session_state.messages,
+
+                "document_text":
+                    st.session_state.document_text,
+
+                "document_name":
+                    st.session_state.document_name,
+
+                "updated_at":
+                    str(__import__("datetime").datetime.now())
+            }
+
+        save_chats(
+            all_chats
         )
 
-        # ==============================================
-        # REFRESH SIDEBAR
-        # ==============================================
+else:
 
-        st.rerun()
+    st.info(
+        "📁 Upload a document first to start chatting."
+    )
