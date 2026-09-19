@@ -1,477 +1,449 @@
 import os
 import json
-import hashlib
-import requests
+import uuid
+import time
 from datetime import datetime
 
 import streamlit as st
 import pandas as pd
+import requests
 
 from bs4 import BeautifulSoup
+
 from docx import Document as DocxDocument
 
 from langchain_core.documents import Document
-from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain.text_splitter import RecursiveCharacterTextSplitter
 
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import HuggingFaceEmbeddings
 
-from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
+from transformers import (
+    AutoTokenizer,
+    AutoModelForCausalLM,
+    pipeline,
+)
+
+import torch
 
 
 # ============================================================
-# PAGE CONFIG
+# PAGE CONFIGURATION
 # ============================================================
 
 st.set_page_config(
     page_title="AI Document Intelligence",
-    page_icon="✦",
+    page_icon="✨",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="expanded",
 )
 
 
 # ============================================================
-# DARK CLAUDE-STYLE CSS
-# ============================================================
-
-st.markdown(
-    """
-<style>
-
-/* =========================================================
-   GLOBAL
-   ========================================================= */
-
-html, body, [class*="css"] {
-    font-family:
-        Inter,
-        -apple-system,
-        BlinkMacSystemFont,
-        "Segoe UI",
-        sans-serif;
-}
-
-.stApp {
-    background: #1f1e1b;
-    color: #f5f5f0;
-}
-
-/* Main area */
-
-.main .block-container {
-    max-width: 1100px;
-    padding-top: 30px;
-    padding-bottom: 120px;
-}
-
-/* Remove Streamlit decoration */
-
-#MainMenu {
-    visibility: hidden;
-}
-
-footer {
-    visibility: hidden;
-}
-
-header[data-testid="stHeader"] {
-    background: transparent;
-}
-
-
-/* =========================================================
-   SIDEBAR
-   ========================================================= */
-
-section[data-testid="stSidebar"] {
-    background: #171614 !important;
-    border-right: 1px solid #34312c;
-}
-
-section[data-testid="stSidebar"] > div {
-    background: #171614 !important;
-}
-
-section[data-testid="stSidebar"] * {
-    color: #f1eee7;
-}
-
-.sidebar-title {
-    font-size: 18px;
-    font-weight: 700;
-    padding: 8px 0 20px 0;
-    color: #f4f1ea;
-}
-
-.sidebar-brand {
-    color: #e7a15a;
-    font-size: 18px;
-    font-weight: 700;
-}
-
-
-/* =========================================================
-   HEADER
-   ========================================================= */
-
-.app-header {
-    text-align: center;
-    padding: 18px 0 10px 0;
-}
-
-.app-title {
-    font-size: 28px;
-    font-weight: 700;
-    color: #f5f3ed;
-    letter-spacing: -0.5px;
-}
-
-.app-subtitle {
-    margin-top: 7px;
-    color: #aaa69e;
-    font-size: 14px;
-}
-
-
-/* =========================================================
-   WELCOME
-   ========================================================= */
-
-.welcome {
-    text-align: center;
-    padding: 75px 20px 45px 20px;
-}
-
-.welcome-symbol {
-    font-size: 34px;
-    color: #e7a15a;
-    margin-bottom: 18px;
-}
-
-.welcome-title {
-    font-size: 29px;
-    font-weight: 600;
-    color: #f5f2eb;
-}
-
-.welcome-text {
-    margin-top: 12px;
-    color: #aaa69e;
-    font-size: 16px;
-}
-
-
-/* =========================================================
-   SOURCE AREA
-   ========================================================= */
-
-div[data-testid="stExpander"] {
-    background: #22211e !important;
-    border: 1px solid #45413b !important;
-    border-radius: 12px !important;
-}
-
-div[data-testid="stExpander"] summary {
-    color: #eeeae2 !important;
-}
-
-.source-badge {
-    display: inline-block;
-    margin: 10px 0 15px 0;
-    padding: 7px 12px;
-    border-radius: 8px;
-    background: #292721;
-    border: 1px solid #46423a;
-    color: #d8d2c8;
-    font-size: 13px;
-}
-
-
-/* =========================================================
-   CHAT MESSAGES
-   ========================================================= */
-
-div[data-testid="stChatMessage"] {
-    background: transparent !important;
-}
-
-div[data-testid="stChatMessage"] p {
-    color: #eeeae3;
-    line-height: 1.65;
-}
-
-div[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] {
-    color: #eeeae3;
-}
-
-
-/* User message */
-
-div[data-testid="stChatMessage"]:has(
-    div[data-testid="chatAvatarIcon-user"]
-) {
-    background: #292722 !important;
-    border-radius: 14px;
-    padding: 5px;
-}
-
-
-/* =========================================================
-   CHAT INPUT
-   ========================================================= */
-
-div[data-testid="stChatInput"] {
-    background: #252420 !important;
-    border: 1px solid #514c44 !important;
-    border-radius: 18px !important;
-}
-
-div[data-testid="stChatInput"] textarea {
-    background: transparent !important;
-    color: #f5f2eb !important;
-    font-size: 15px !important;
-}
-
-div[data-testid="stChatInput"] textarea::placeholder {
-    color: #8f8b84 !important;
-}
-
-div[data-testid="stChatInput"] button {
-    background: #e7a15a !important;
-    color: #1f1e1b !important;
-    border-radius: 10px !important;
-}
-
-div[data-testid="stChatInput"] button:hover {
-    background: #f0b477 !important;
-}
-
-
-/* =========================================================
-   TOKEN LIMIT NEAR CHAT BOX
-   ========================================================= */
-
-.token-limit-bar {
-    position: fixed;
-    right: 35px;
-    bottom: 82px;
-    z-index: 999;
-    padding: 5px 11px;
-    border-radius: 8px;
-    background: #2b2925;
-    border: 1px solid #45413a;
-    color: #a9a49c;
-    font-size: 12px;
-}
-
-
-/* =========================================================
-   BUTTONS
-   ========================================================= */
-
-.stButton > button {
-    background: #292722 !important;
-    color: #eeeae5 !important;
-    border: 1px solid #49453e !important;
-    border-radius: 9px !important;
-    min-height: 40px;
-}
-
-.stButton > button:hover {
-    background: #35322c !important;
-    border-color: #e7a15a !important;
-    color: #ffffff !important;
-}
-
-
-/* Orange primary button */
-
-.primary-button button {
-    background: #e7a15a !important;
-    color: #211d18 !important;
-    border: none !important;
-    font-weight: 700 !important;
-}
-
-.primary-button button:hover {
-    background: #f0b477 !important;
-}
-
-
-/* =========================================================
-   INPUTS
-   ========================================================= */
-
-.stTextInput input,
-.stTextArea textarea {
-    background: #252420 !important;
-    color: #f3f0e9 !important;
-    border: 1px solid #4b4740 !important;
-    border-radius: 9px !important;
-}
-
-.stTextInput input:focus,
-.stTextArea textarea:focus {
-    border-color: #e7a15a !important;
-    box-shadow: 0 0 0 1px #e7a15a !important;
-}
-
-
-/* =========================================================
-   SELECTBOX / RADIO / FILE UPLOADER
-   ========================================================= */
-
-div[data-baseweb="select"] > div {
-    background: #252420 !important;
-    border-color: #4b4740 !important;
-    color: #eeeae4 !important;
-}
-
-div[data-testid="stFileUploader"] {
-    background: #252420 !important;
-    border: 1px dashed #514d45 !important;
-    border-radius: 10px !important;
-}
-
-div[data-testid="stFileUploader"] * {
-    color: #ddd8d0 !important;
-}
-
-
-/* =========================================================
-   USAGE CARD
-   ========================================================= */
-
-.usage-card {
-    margin-top: 8px;
-    padding: 14px;
-    background: #24221f;
-    border: 1px solid #3f3c36;
-    border-radius: 11px;
-    line-height: 1.9;
-    font-size: 13px;
-    color: #aaa69f;
-}
-
-.usage-card b {
-    color: #eeeae3;
-}
-
-
-/* =========================================================
-   CHAT HISTORY
-   ========================================================= */
-
-.chat-history-title {
-    color: #8f8b84;
-    font-size: 12px;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    margin-top: 25px;
-    margin-bottom: 8px;
-}
-
-
-/* =========================================================
-   ALERTS
-   ========================================================= */
-
-div[data-testid="stAlert"] {
-    border-radius: 10px !important;
-}
-
-
-/* =========================================================
-   LOGIN
-   ========================================================= */
-
-.login-container {
-    max-width: 620px;
-    margin: 80px auto 0 auto;
-}
-
-.login-logo {
-    text-align: center;
-    font-size: 36px;
-    color: #e7a15a;
-    margin-bottom: 12px;
-}
-
-.login-title {
-    text-align: center;
-    font-size: 30px;
-    font-weight: 700;
-    color: #f5f2eb;
-}
-
-.login-subtitle {
-    text-align: center;
-    color: #aaa69e;
-    margin-top: 10px;
-    margin-bottom: 45px;
-}
-
-
-/* =========================================================
-   SETTINGS
-   ========================================================= */
-
-.settings-box {
-    padding: 15px;
-    background: #25231f;
-    border: 1px solid #3e3a34;
-    border-radius: 10px;
-}
-
-
-/* =========================================================
-   MOBILE
-   ========================================================= */
-
-@media (max-width: 768px) {
-
-    .main .block-container {
-        padding-left: 15px;
-        padding-right: 15px;
-    }
-
-    .app-title {
-        font-size: 23px;
-    }
-
-    .welcome {
-        padding-top: 45px;
-    }
-
-    .welcome-title {
-        font-size: 24px;
-    }
-
-    .token-limit-bar {
-        right: 15px;
-        bottom: 82px;
-    }
-}
-
-</style>
-""",
-    unsafe_allow_html=True
-)
-
-
-# ============================================================
-# FILE PATHS
+# CONSTANTS
 # ============================================================
 
 USERS_FILE = "users.json"
 CHATS_FILE = "chats.json"
 USAGE_FILE = "usage.json"
 
+MODEL_NAME = "HuggingFaceTB/SmolLM2-360M-Instruct"
+EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
+
+MAX_RESPONSE_TOKENS = 100
+RETRIEVER_K = 2
+
 
 # ============================================================
-# JSON HELPERS
+# DARK CLAUDE-STYLE THEME
+# ============================================================
+
+st.markdown(
+    """
+    <style>
+
+    /* ========================================================
+       MAIN PAGE
+       ======================================================== */
+
+    .stApp {
+        background: #1f1e1b;
+        color: #f5f1e8;
+    }
+
+    .main {
+        background: #1f1e1b;
+    }
+
+    [data-testid="stAppViewContainer"] {
+        background: #1f1e1b;
+    }
+
+    [data-testid="stHeader"] {
+        background: #1f1e1b;
+    }
+
+    /* ========================================================
+       SIDEBAR
+       ======================================================== */
+
+    [data-testid="stSidebar"] {
+        background: #171614;
+        border-right: 1px solid #37342f;
+    }
+
+    [data-testid="stSidebar"] * {
+        color: #eee9df;
+    }
+
+    /* ========================================================
+       SIDEBAR BRAND
+       ======================================================== */
+
+    .sidebar-brand {
+        font-size: 20px;
+        font-weight: 700;
+        color: #f5f1e8;
+        padding: 12px 4px 20px 4px;
+    }
+
+    .sidebar-brand span {
+        color: #f0a45d;
+    }
+
+    /* ========================================================
+       BUTTONS
+       ======================================================== */
+
+    .stButton > button {
+        background: #2b2925 !important;
+        color: #f5f1e8 !important;
+        border: 1px solid #45413b !important;
+        border-radius: 10px !important;
+        min-height: 42px;
+        font-weight: 500;
+    }
+
+    .stButton > button:hover {
+        background: #34312c !important;
+        border-color: #625b51 !important;
+        color: #ffffff !important;
+    }
+
+    /* Primary buttons */
+
+    .primary-button > button {
+        background: #f0a45d !important;
+        color: #1f1e1b !important;
+        border: none !important;
+        font-weight: 700 !important;
+    }
+
+    .primary-button > button:hover {
+        background: #f5b275 !important;
+    }
+
+    /* ========================================================
+       INPUTS
+       ======================================================== */
+
+    input,
+    textarea {
+        background: #292723 !important;
+        color: #f5f1e8 !important;
+        border: 1px solid #45413b !important;
+        border-radius: 10px !important;
+    }
+
+    input::placeholder,
+    textarea::placeholder {
+        color: #8f8a82 !important;
+    }
+
+    input:focus,
+    textarea:focus {
+        border-color: #f0a45d !important;
+        box-shadow: 0 0 0 1px #f0a45d !important;
+    }
+
+    /* ========================================================
+       SELECTBOX / RADIO
+       ======================================================== */
+
+    [data-baseweb="select"] > div {
+        background: #292723 !important;
+        border-color: #45413b !important;
+        color: #f5f1e8 !important;
+    }
+
+    [data-testid="stRadio"] label {
+        color: #ddd7ce !important;
+    }
+
+    /* ========================================================
+       EXPANDER
+       ======================================================== */
+
+    [data-testid="stExpander"] {
+        background: #24221f !important;
+        border: 1px solid #45413b !important;
+        border-radius: 12px !important;
+    }
+
+    [data-testid="stExpander"] summary {
+        color: #f5f1e8 !important;
+    }
+
+    /* ========================================================
+       APP HEADER
+       ======================================================== */
+
+    .app-header {
+        text-align: center;
+        padding-top: 10px;
+        padding-bottom: 18px;
+    }
+
+    .app-title {
+        font-size: 30px;
+        font-weight: 700;
+        color: #f5f1e8;
+        margin-bottom: 5px;
+    }
+
+    .app-title .star {
+        color: #f0a45d;
+    }
+
+    .app-subtitle {
+        color: #9d988f;
+        font-size: 15px;
+    }
+
+    /* ========================================================
+       WELCOME AREA
+       ======================================================== */
+
+    .welcome-area {
+        text-align: center;
+        margin-top: 100px;
+        margin-bottom: 100px;
+    }
+
+    .welcome-symbol {
+        font-size: 42px;
+        color: #f0a45d;
+        margin-bottom: 15px;
+    }
+
+    .welcome-title {
+        font-size: 30px;
+        font-weight: 650;
+        color: #f5f1e8;
+        margin-bottom: 12px;
+    }
+
+    .welcome-text {
+        color: #9d988f;
+        font-size: 16px;
+    }
+
+    /* ========================================================
+       USER MESSAGE
+       ======================================================== */
+
+    [data-testid="stChatMessage"] {
+        background: transparent !important;
+    }
+
+    /* ========================================================
+       CHAT MESSAGE
+       ======================================================== */
+
+    .assistant-bubble {
+        background: #292723;
+        border: 1px solid #3d3933;
+        border-radius: 14px;
+        padding: 15px 18px;
+        margin: 8px 0;
+        color: #eee9df;
+        line-height: 1.65;
+    }
+
+    .user-bubble {
+        background: #34312c;
+        border-radius: 14px;
+        padding: 13px 17px;
+        color: #f5f1e8;
+        line-height: 1.6;
+    }
+
+    /* ========================================================
+       TOKEN INFORMATION
+       ======================================================== */
+
+    .token-info {
+        text-align: right;
+        color: #858078;
+        font-size: 11px;
+        margin-top: 5px;
+        padding-right: 4px;
+    }
+
+    .token-info strong {
+        color: #aaa49b;
+    }
+
+    /* ========================================================
+       USAGE BOX
+       ======================================================== */
+
+    .usage-box {
+        background: #25231f;
+        border: 1px solid #3b3832;
+        border-radius: 12px;
+        padding: 13px;
+        margin-top: 8px;
+    }
+
+    .usage-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 6px 0;
+        font-size: 13px;
+        color: #aaa49f;
+    }
+
+    .usage-row strong {
+        color: #f1ece4;
+        font-weight: 600;
+    }
+
+    .usage-divider {
+        height: 1px;
+        background: #3b3832;
+        margin: 7px 0;
+    }
+
+    .usage-total {
+        color: #f0a45d;
+    }
+
+    .usage-total strong {
+        color: #f0a45d;
+    }
+
+    /* ========================================================
+       COMPOSER AREA
+       ======================================================== */
+
+    .composer-wrapper {
+        background: #24221f;
+        border: 1px solid #45413b;
+        border-radius: 16px;
+        padding: 8px 12px 7px 12px;
+        margin-top: 10px;
+    }
+
+    .composer-label {
+        color: #777169;
+        font-size: 11px;
+        text-align: right;
+        padding-right: 8px;
+        margin-top: -2px;
+    }
+
+    /* ========================================================
+       MAX RESPONSE BADGE
+       ======================================================== */
+
+    .max-token-badge {
+        display: inline-block;
+        background: #2d2a26;
+        border: 1px solid #48433b;
+        color: #aaa39a;
+        border-radius: 8px;
+        padding: 4px 9px;
+        font-size: 11px;
+        float: right;
+        margin-top: -3px;
+    }
+
+    .max-token-badge strong {
+        color: #d2cbc0;
+    }
+
+    /* ========================================================
+       SOURCE BOX
+       ======================================================== */
+
+    .source-info {
+        background: #25231f;
+        border: 1px solid #3d3933;
+        border-radius: 10px;
+        padding: 10px 13px;
+        color: #aaa49b;
+        font-size: 13px;
+        margin-bottom: 15px;
+    }
+
+    .source-info strong {
+        color: #eee9df;
+    }
+
+    /* ========================================================
+       LOGIN PAGE
+       ======================================================== */
+
+    .login-container {
+        max-width: 560px;
+        margin: 80px auto 0 auto;
+    }
+
+    .login-title {
+        text-align: center;
+        font-size: 34px;
+        font-weight: 700;
+        color: #f5f1e8;
+    }
+
+    .login-subtitle {
+        text-align: center;
+        color: #9d988f;
+        margin-top: 8px;
+        margin-bottom: 35px;
+    }
+
+    /* ========================================================
+       ALERTS
+       ======================================================== */
+
+    [data-testid="stAlert"] {
+        border-radius: 10px !important;
+    }
+
+    /* ========================================================
+       HIDE STREAMLIT BRANDING
+       ======================================================== */
+
+    #MainMenu {
+        visibility: hidden;
+    }
+
+    footer {
+        visibility: hidden;
+    }
+
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+
+# ============================================================
+# FILE HELPERS
 # ============================================================
 
 def load_json(filename, default):
@@ -486,221 +458,17 @@ def load_json(filename, default):
 
 
 def save_json(filename, data):
-    try:
-        with open(filename, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
-    except Exception:
-        pass
+    with open(filename, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
 
 
 # ============================================================
-# PASSWORD HELPERS
+# LOAD DATA
 # ============================================================
 
-def hash_password(password):
-    return hashlib.sha256(password.encode("utf-8")).hexdigest()
-
-
-# ============================================================
-# USER FUNCTIONS
-# ============================================================
-
-def create_user(username, password):
-
-    users = load_json(USERS_FILE, {})
-
-    username = username.strip()
-
-    if not username or not password:
-        return False, "Username and password are required."
-
-    if username in users:
-        return False, "Username already exists."
-
-    users[username] = {
-        "password": hash_password(password),
-        "created_at": datetime.now().isoformat()
-    }
-
-    save_json(USERS_FILE, users)
-
-    return True, "Account created successfully."
-
-
-def verify_user(username, password):
-
-    users = load_json(USERS_FILE, {})
-
-    if username not in users:
-        return False
-
-    stored_password = users[username].get("password", "")
-
-    # New hashed password
-    if stored_password == hash_password(password):
-        return True
-
-    # Compatibility with older plaintext users.json
-    if stored_password == password:
-        return True
-
-    return False
-
-
-# ============================================================
-# USAGE FUNCTIONS
-# ============================================================
-
-def get_user_usage(username):
-
-    usage = load_json(USAGE_FILE, {})
-
-    return usage.get(
-        username,
-        {
-            "requests": 0,
-            "input_tokens": 0,
-            "output_tokens": 0,
-            "total_tokens": 0
-        }
-    )
-
-
-def update_user_usage(
-    username,
-    input_tokens,
-    output_tokens
-):
-
-    usage = load_json(USAGE_FILE, {})
-
-    if username not in usage:
-        usage[username] = {
-            "requests": 0,
-            "input_tokens": 0,
-            "output_tokens": 0,
-            "total_tokens": 0
-        }
-
-    usage[username]["requests"] += 1
-    usage[username]["input_tokens"] += input_tokens
-    usage[username]["output_tokens"] += output_tokens
-    usage[username]["total_tokens"] += (
-        input_tokens + output_tokens
-    )
-
-    save_json(USAGE_FILE, usage)
-
-
-# ============================================================
-# CHAT FUNCTIONS
-# ============================================================
-
-def load_all_chats():
-
-    return load_json(CHATS_FILE, {})
-
-
-def save_all_chats(chats):
-
-    save_json(CHATS_FILE, chats)
-
-
-def get_user_chats(username):
-
-    chats = load_all_chats()
-
-    if username not in chats:
-        chats[username] = {}
-
-    return chats[username]
-
-
-def create_chat(username):
-
-    chats = load_all_chats()
-
-    if username not in chats:
-        chats[username] = {}
-
-    chat_id = datetime.now().strftime(
-        "%Y%m%d%H%M%S%f"
-    )
-
-    chats[username][chat_id] = {
-        "title": "New Chat",
-        "messages": [],
-        "document_name": "",
-        "document_text": "",
-        "source_type": "",
-        "total_tokens": 0,
-        "created_at": datetime.now().isoformat(),
-        "updated_at": datetime.now().isoformat()
-    }
-
-    save_all_chats(chats)
-
-    return chat_id
-
-
-def save_chat(
-    username,
-    chat_id,
-    messages,
-    document_name,
-    document_text,
-    source_type,
-    total_tokens
-):
-
-    chats = load_all_chats()
-
-    if username not in chats:
-        chats[username] = {}
-
-    if chat_id not in chats[username]:
-        chats[username][chat_id] = {}
-
-    title = "New Chat"
-
-    for message in messages:
-
-        if message["role"] == "user":
-
-            title = message["content"][:45]
-
-            if len(message["content"]) > 45:
-                title += "..."
-
-            break
-
-    chats[username][chat_id].update(
-        {
-            "title": title,
-            "messages": messages,
-            "document_name": document_name,
-            "document_text": document_text,
-            "source_type": source_type,
-            "total_tokens": total_tokens,
-            "updated_at": datetime.now().isoformat()
-        }
-    )
-
-    save_all_chats(chats)
-
-
-def delete_chat(username, chat_id):
-
-    chats = load_all_chats()
-
-    if (
-        username in chats
-        and chat_id in chats[username]
-    ):
-
-        del chats[username][chat_id]
-
-        save_all_chats(chats)
+users = load_json(USERS_FILE, {})
+chats = load_json(CHATS_FILE, {})
+usage_data = load_json(USAGE_FILE, {})
 
 
 # ============================================================
@@ -716,15 +484,79 @@ defaults = {
     "document_text": "",
     "document_name": "",
     "source_type": "",
-    "chat_total_tokens": 0,
-    "response_length": 100,
-    "show_settings": False
+    "chat_loaded": False,
+    "new_chat": False,
+    "prompt_text": "",
 }
 
 for key, value in defaults.items():
-
     if key not in st.session_state:
         st.session_state[key] = value
+
+
+# ============================================================
+# TOKEN COUNTER
+# ============================================================
+
+@st.cache_resource
+def load_tokenizer():
+    return AutoTokenizer.from_pretrained(MODEL_NAME)
+
+
+def count_tokens(text):
+    if not text:
+        return 0
+
+    try:
+        tokenizer = load_tokenizer()
+        tokens = tokenizer.encode(
+            text,
+            add_special_tokens=True
+        )
+        return len(tokens)
+
+    except Exception:
+        return 0
+
+
+# ============================================================
+# MODEL
+# ============================================================
+
+@st.cache_resource
+def load_llm():
+
+    tokenizer = AutoTokenizer.from_pretrained(
+        MODEL_NAME
+    )
+
+    model = AutoModelForCausalLM.from_pretrained(
+        MODEL_NAME
+    )
+
+    generator = pipeline(
+        "text-generation",
+        model=model,
+        tokenizer=tokenizer,
+        max_new_tokens=MAX_RESPONSE_TOKENS,
+        do_sample=False,
+        return_full_text=False,
+        pad_token_id=tokenizer.eos_token_id,
+    )
+
+    return generator, tokenizer
+
+
+# ============================================================
+# EMBEDDINGS
+# ============================================================
+
+@st.cache_resource
+def load_embeddings():
+
+    return HuggingFaceEmbeddings(
+        model_name=EMBEDDING_MODEL
+    )
 
 
 # ============================================================
@@ -738,176 +570,295 @@ def get_greeting():
     if hour < 12:
         return "Good Morning"
 
-    if hour < 17:
+    elif hour < 17:
         return "Good Afternoon"
 
-    return "Good Evening"
+    else:
+        return "Good Evening"
 
 
 # ============================================================
-# TOKEN COUNT
+# USER USAGE
 # ============================================================
 
-def count_tokens(tokenizer, text):
+def get_user_usage(username):
 
-    try:
+    if username not in usage_data:
 
-        tokens = tokenizer.encode(
-            text,
-            add_special_tokens=True
-        )
+        usage_data[username] = {
+            "requests": 0,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "total_tokens": 0,
+        }
 
-        return len(tokens)
+        save_json(USAGE_FILE, usage_data)
 
-    except Exception:
-
-        return 0
+    return usage_data[username]
 
 
 # ============================================================
-# EMBEDDINGS
+# CREATE CHAT
 # ============================================================
 
-@st.cache_resource(show_spinner=False)
-def load_embeddings():
+def create_new_chat():
 
-    return HuggingFaceEmbeddings(
-        model_name="sentence-transformers/all-MiniLM-L6-v2"
+    chat_id = str(uuid.uuid4())
+
+    chats[chat_id] = {
+        "username": st.session_state.username,
+        "title": "New Chat",
+        "messages": [],
+        "document_text": "",
+        "document_name": "",
+        "source_type": "",
+        "total_tokens": 0,
+        "created_at": datetime.now().isoformat(),
+        "updated_at": datetime.now().isoformat(),
+    }
+
+    save_json(CHATS_FILE, chats)
+
+    st.session_state.current_chat_id = chat_id
+    st.session_state.messages = []
+    st.session_state.retriever = None
+    st.session_state.document_text = ""
+    st.session_state.document_name = ""
+    st.session_state.source_type = ""
+    st.session_state.chat_loaded = False
+    st.session_state.new_chat = True
+
+
+# ============================================================
+# SAVE CURRENT CHAT
+# ============================================================
+
+def save_current_chat():
+
+    chat_id = st.session_state.current_chat_id
+
+    if not chat_id:
+        return
+
+    if chat_id not in chats:
+        return
+
+    chats[chat_id]["messages"] = st.session_state.messages
+    chats[chat_id]["document_text"] = st.session_state.document_text
+    chats[chat_id]["document_name"] = st.session_state.document_name
+    chats[chat_id]["source_type"] = st.session_state.source_type
+
+    chats[chat_id]["updated_at"] = datetime.now().isoformat()
+
+    if st.session_state.messages:
+
+        first_user_message = None
+
+        for msg in st.session_state.messages:
+
+            if msg["role"] == "user":
+                first_user_message = msg["content"]
+                break
+
+        if first_user_message:
+
+            title = first_user_message[:40]
+
+            if len(first_user_message) > 40:
+                title += "..."
+
+            chats[chat_id]["title"] = title
+
+    save_json(CHATS_FILE, chats)
+
+
+# ============================================================
+# LOAD CHAT
+# ============================================================
+
+def load_chat(chat_id):
+
+    if chat_id not in chats:
+        return
+
+    chat = chats[chat_id]
+
+    st.session_state.current_chat_id = chat_id
+
+    st.session_state.messages = chat.get(
+        "messages",
+        []
     )
 
-
-# ============================================================
-# LOCAL LLM
-# ============================================================
-
-@st.cache_resource(show_spinner=False)
-def load_llm():
-
-    model_name = "HuggingFaceTB/SmolLM2-360M-Instruct"
-
-    tokenizer = AutoTokenizer.from_pretrained(
-        model_name
+    st.session_state.document_text = chat.get(
+        "document_text",
+        ""
     )
 
-    model = AutoModelForCausalLM.from_pretrained(
-        model_name
+    st.session_state.document_name = chat.get(
+        "document_name",
+        ""
     )
 
-    generator = pipeline(
-        "text-generation",
-        model=model,
-        tokenizer=tokenizer,
-        max_new_tokens=100,
-        do_sample=False,
-        return_full_text=False,
-        pad_token_id=tokenizer.eos_token_id
+    st.session_state.source_type = chat.get(
+        "source_type",
+        ""
     )
 
-    return generator, tokenizer
+    st.session_state.retriever = None
+
+    # Rebuild retriever if document exists
+
+    if st.session_state.document_text:
+
+        try:
+
+            docs = [
+                Document(
+                    page_content=st.session_state.document_text
+                )
+            ]
+
+            splitter = RecursiveCharacterTextSplitter(
+                chunk_size=1000,
+                chunk_overlap=200
+            )
+
+            chunks = splitter.split_documents(docs)
+
+            embeddings = load_embeddings()
+
+            vectorstore = FAISS.from_documents(
+                chunks,
+                embeddings
+            )
+
+            st.session_state.retriever = (
+                vectorstore.as_retriever(
+                    search_kwargs={
+                        "k": RETRIEVER_K
+                    }
+                )
+            )
+
+        except Exception as e:
+
+            st.session_state.retriever = None
+
+    st.session_state.chat_loaded = True
+    st.session_state.new_chat = False
 
 
 # ============================================================
 # DOCUMENT PROCESSING
 # ============================================================
 
-def process_uploaded_file(uploaded_file):
+def process_document(uploaded_file):
 
-    filename = uploaded_file.name.lower()
+    file_name = uploaded_file.name
 
-    documents = []
+    extension = file_name.lower().split(".")[-1]
+
+    text = ""
 
     # --------------------------------------------------------
     # PDF
     # --------------------------------------------------------
 
-    if filename.endswith(".pdf"):
+    if extension == "pdf":
 
-        temp_path = "temp_uploaded.pdf"
+        temp_path = f"_temp_{uuid.uuid4()}.pdf"
 
         with open(temp_path, "wb") as f:
             f.write(uploaded_file.getbuffer())
 
-        loader = PyPDFLoader(temp_path)
-
-        documents = loader.load()
-
         try:
-            os.remove(temp_path)
-        except Exception:
-            pass
 
+            loader = PyPDFLoader(temp_path)
+
+            pages = loader.load()
+
+            text = "\n\n".join(
+                page.page_content
+                for page in pages
+            )
+
+        finally:
+
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
 
     # --------------------------------------------------------
     # TXT
     # --------------------------------------------------------
 
-    elif filename.endswith(".txt"):
+    elif extension == "txt":
 
-        text = uploaded_file.getvalue().decode(
-            "utf-8",
-            errors="ignore"
-        )
+        raw = uploaded_file.read()
 
-        documents = [
-            Document(page_content=text)
-        ]
+        try:
+            text = raw.decode("utf-8")
 
+        except UnicodeDecodeError:
+
+            text = raw.decode(
+                "latin-1",
+                errors="ignore"
+            )
 
     # --------------------------------------------------------
     # DOCX
     # --------------------------------------------------------
 
-    elif filename.endswith(".docx"):
+    elif extension == "docx":
 
         doc = DocxDocument(uploaded_file)
 
-        paragraphs = [
-            p.text
-            for p in doc.paragraphs
-            if p.text.strip()
-        ]
+        paragraphs = []
+
+        for paragraph in doc.paragraphs:
+
+            if paragraph.text.strip():
+
+                paragraphs.append(
+                    paragraph.text
+                )
 
         text = "\n".join(paragraphs)
-
-        documents = [
-            Document(page_content=text)
-        ]
-
 
     # --------------------------------------------------------
     # XLSX
     # --------------------------------------------------------
 
-    elif filename.endswith(".xlsx"):
+    elif extension == "xlsx":
 
-        excel = pd.ExcelFile(uploaded_file)
+        excel_file = pd.ExcelFile(
+            uploaded_file
+        )
 
-        for sheet in excel.sheet_names:
+        sheets = []
+
+        for sheet_name in excel_file.sheet_names:
 
             df = pd.read_excel(
                 uploaded_file,
-                sheet_name=sheet
+                sheet_name=sheet_name
             )
 
-            text = df.to_string(
-                index=False
+            sheets.append(
+                f"Sheet: {sheet_name}\n\n"
+                + df.to_string(index=False)
             )
 
-            documents.append(
-                Document(
-                    page_content=(
-                        f"Sheet: {sheet}\n\n{text}"
-                    )
-                )
-            )
+        text = "\n\n".join(sheets)
 
     else:
 
         raise ValueError(
-            "Unsupported file type."
+            "Unsupported file format."
         )
 
-    return documents
+    return text
 
 
 # ============================================================
@@ -916,11 +867,19 @@ def process_uploaded_file(uploaded_file):
 
 def process_website(url):
 
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 "
+            "(Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 "
+            "(KHTML, like Gecko) "
+            "Chrome/120.0 Safari/537.36"
+        )
+    }
+
     response = requests.get(
         url,
-        headers={
-            "User-Agent": "Mozilla/5.0"
-        },
+        headers=headers,
         timeout=20
     )
 
@@ -931,6 +890,8 @@ def process_website(url):
         "html.parser"
     )
 
+    # Remove unnecessary elements
+
     for tag in soup(
         [
             "script",
@@ -938,7 +899,8 @@ def process_website(url):
             "noscript",
             "header",
             "footer",
-            "nav"
+            "nav",
+            "svg",
         ]
     ):
 
@@ -948,30 +910,29 @@ def process_website(url):
         separator="\n"
     )
 
-    lines = [
-        line.strip()
-        for line in text.splitlines()
-        if line.strip()
-    ]
+    lines = []
 
-    clean_text = "\n".join(lines)
+    for line in text.splitlines():
 
-    if not clean_text.strip():
+        cleaned = line.strip()
 
-        raise ValueError(
-            "Could not extract readable text from this website."
+        if cleaned:
+            lines.append(cleaned)
+
+    return "\n".join(lines)
+
+
+# ============================================================
+# BUILD RETRIEVER
+# ============================================================
+
+def build_retriever(text):
+
+    documents = [
+        Document(
+            page_content=text
         )
-
-    return [
-        Document(page_content=clean_text)
     ]
-
-
-# ============================================================
-# BUILD VECTOR STORE
-# ============================================================
-
-def build_retriever(documents):
 
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=1000,
@@ -982,12 +943,6 @@ def build_retriever(documents):
         documents
     )
 
-    if not chunks:
-
-        raise ValueError(
-            "No readable content was found."
-        )
-
     embeddings = load_embeddings()
 
     vectorstore = FAISS.from_documents(
@@ -995,65 +950,53 @@ def build_retriever(documents):
         embeddings
     )
 
-    # Only retrieve 2 chunks for faster response
-    retriever = vectorstore.as_retriever(
+    return vectorstore.as_retriever(
         search_kwargs={
-            "k": 2
+            "k": RETRIEVER_K
         }
     )
 
-    return retriever
-
 
 # ============================================================
-# REBUILD RETRIEVER FROM SAVED CHAT
+# ANSWER QUESTION
 # ============================================================
 
-def rebuild_retriever_from_text(text):
+def answer_question(question):
 
-    if not text.strip():
-        return None
+    if not st.session_state.retriever:
 
-    documents = [
-        Document(
-            page_content=text
-        )
-    ]
+        return (
+            "Please upload a document or add a website "
+            "before asking a question."
+        ), 0, 0
 
-    return build_retriever(
-        documents
-    )
+    # --------------------------------------------------------
+    # Retrieve context
+    # --------------------------------------------------------
 
-
-# ============================================================
-# GENERATE ANSWER
-# ============================================================
-
-def generate_answer(
-    question,
-    retriever,
-    generator,
-    tokenizer
-):
-
-    docs = retriever.invoke(
+    documents = st.session_state.retriever.invoke(
         question
     )
 
     context = "\n\n".join(
         doc.page_content
-        for doc in docs
+        for doc in documents
     )
+
+    # --------------------------------------------------------
+    # Prompt
+    # --------------------------------------------------------
 
     prompt = f"""
 You are an AI document assistant.
 
 Answer the user's question using ONLY the provided context.
 
-If the answer is not available in the context, say:
-"I could not find that information in the uploaded document."
+If the answer cannot be found in the context, say:
 
-Keep the answer clear, direct and concise.
+"I could not find that information in the document."
+
+Be concise and direct.
 
 Context:
 {context}
@@ -1064,29 +1007,48 @@ Question:
 Answer:
 """
 
+    # --------------------------------------------------------
+    # Token count
+    # --------------------------------------------------------
+
     input_tokens = count_tokens(
-        tokenizer,
         prompt
     )
 
+    # --------------------------------------------------------
+    # Generate
+    # --------------------------------------------------------
+
+    generator, tokenizer = load_llm()
+
     result = generator(
         prompt,
-        max_new_tokens=100,
+        max_new_tokens=MAX_RESPONSE_TOKENS,
         do_sample=False,
-        return_full_text=False
+        return_full_text=False,
     )
 
     answer = result[0]["generated_text"].strip()
 
+    # --------------------------------------------------------
+    # Clean answer
+    # --------------------------------------------------------
+
+    if "Answer:" in answer:
+
+        answer = answer.split(
+            "Answer:",
+            1
+        )[-1].strip()
+
     output_tokens = count_tokens(
-        tokenizer,
         answer
     )
 
     return (
         answer,
         input_tokens,
-        output_tokens
+        output_tokens,
     )
 
 
@@ -1094,17 +1056,14 @@ Answer:
 # LOGIN PAGE
 # ============================================================
 
-def show_login():
+def login_page():
 
-    st.html(
+    st.markdown(
         """
         <div class="login-container">
 
-            <div class="login-logo">
-                ✦
-            </div>
-
             <div class="login-title">
+                <span style="color:#f0a45d;">✦</span>
                 AI Document Intelligence
             </div>
 
@@ -1113,21 +1072,19 @@ def show_login():
             </div>
 
         </div>
-        """
+        """,
+        unsafe_allow_html=True
     )
 
-    tab_login, tab_create = st.tabs(
-        [
-            "Login",
-            "Create Account"
-        ]
+    login_tab, create_tab = st.tabs(
+        ["Login", "Create Account"]
     )
 
     # ========================================================
     # LOGIN
     # ========================================================
 
-    with tab_login:
+    with login_tab:
 
         username = st.text_input(
             "Username",
@@ -1159,25 +1116,38 @@ def show_login():
 
         if login_clicked:
 
-            if verify_user(
-                username,
-                password
+            if (
+                username in users
+                and users[username]["password"] == password
             ):
 
                 st.session_state.logged_in = True
                 st.session_state.username = username
 
-                chat_id = create_chat(
-                    username
-                )
+                # Find user's latest chat
 
-                st.session_state.current_chat_id = chat_id
-                st.session_state.messages = []
-                st.session_state.retriever = None
-                st.session_state.document_text = ""
-                st.session_state.document_name = ""
-                st.session_state.source_type = ""
-                st.session_state.chat_total_tokens = 0
+                user_chat_ids = [
+                    cid
+                    for cid, chat in chats.items()
+                    if chat.get("username") == username
+                ]
+
+                if user_chat_ids:
+
+                    latest_chat = max(
+                        user_chat_ids,
+                        key=lambda cid:
+                        chats[cid].get(
+                            "updated_at",
+                            ""
+                        )
+                    )
+
+                    load_chat(latest_chat)
+
+                else:
+
+                    create_new_chat()
 
                 st.rerun()
 
@@ -1187,12 +1157,11 @@ def show_login():
                     "Invalid username or password."
                 )
 
-
     # ========================================================
     # CREATE ACCOUNT
     # ========================================================
 
-    with tab_create:
+    with create_tab:
 
         new_username = st.text_input(
             "Username",
@@ -1205,6 +1174,13 @@ def show_login():
             type="password",
             key="create_password",
             placeholder="Create a password"
+        )
+
+        confirm_password = st.text_input(
+            "Confirm Password",
+            type="password",
+            key="confirm_password",
+            placeholder="Confirm your password"
         )
 
         st.markdown(
@@ -1224,33 +1200,79 @@ def show_login():
 
         if create_clicked:
 
-            success, message = create_user(
-                new_username,
-                new_password
-            )
+            new_username = new_username.strip()
 
-            if success:
+            if not new_username:
 
-                st.success(
-                    message
+                st.error(
+                    "Please enter a username."
+                )
+
+            elif new_username in users:
+
+                st.error(
+                    "Username already exists."
+                )
+
+            elif not new_password:
+
+                st.error(
+                    "Please enter a password."
+                )
+
+            elif new_password != confirm_password:
+
+                st.error(
+                    "Passwords do not match."
                 )
 
             else:
 
-                st.error(
-                    message
+                users[new_username] = {
+                    "password": new_password,
+                    "created_at": datetime.now().isoformat(),
+                }
+
+                save_json(
+                    USERS_FILE,
+                    users
+                )
+
+                usage_data[new_username] = {
+                    "requests": 0,
+                    "input_tokens": 0,
+                    "output_tokens": 0,
+                    "total_tokens": 0,
+                }
+
+                save_json(
+                    USAGE_FILE,
+                    usage_data
+                )
+
+                st.success(
+                    "Account created successfully. Please login."
                 )
 
 
 # ============================================================
-# SHOW LOGIN IF NOT LOGGED IN
+# SHOW LOGIN IF NOT AUTHENTICATED
 # ============================================================
 
 if not st.session_state.logged_in:
 
-    show_login()
+    login_page()
 
     st.stop()
+
+
+# ============================================================
+# CURRENT USER USAGE
+# ============================================================
+
+user_usage = get_user_usage(
+    st.session_state.username
+)
 
 
 # ============================================================
@@ -1261,81 +1283,61 @@ with st.sidebar:
 
     st.markdown(
         """
-        <div class="sidebar-title">
-            ✦ <span class="sidebar-brand">
-            AI Document Intelligence
-            </span>
+        <div class="sidebar-brand">
+            <span>✦</span> AI Document Intelligence
         </div>
         """,
         unsafe_allow_html=True
     )
 
-
     # --------------------------------------------------------
-    # NEW CHAT
+    # New Chat
     # --------------------------------------------------------
 
     if st.button(
-        "＋ New Chat",
+        "+ New Chat",
         use_container_width=True
     ):
 
-        chat_id = create_chat(
-            st.session_state.username
-        )
-
-        st.session_state.current_chat_id = chat_id
-
-        st.session_state.messages = []
-
-        st.session_state.retriever = None
-
-        st.session_state.document_text = ""
-
-        st.session_state.document_name = ""
-
-        st.session_state.source_type = ""
-
-        st.session_state.chat_total_tokens = 0
-
-        # Clear uploader / URL state
-        for key in [
-            "uploaded_file",
-            "website_url"
-        ]:
-
-            if key in st.session_state:
-                del st.session_state[key]
+        create_new_chat()
 
         st.rerun()
 
+    st.markdown("---")
+
+    # --------------------------------------------------------
+    # Chats
+    # --------------------------------------------------------
 
     st.markdown(
-        '<div class="chat-history-title">Chats</div>',
-        unsafe_allow_html=True
+        "### Chats"
     )
 
+    user_chats = [
+        (cid, chat)
+        for cid, chat in chats.items()
+        if chat.get("username")
+        == st.session_state.username
+    ]
 
-    # --------------------------------------------------------
-    # CHAT HISTORY
-    # --------------------------------------------------------
-
-    user_chats = get_user_chats(
-        st.session_state.username
+    user_chats.sort(
+        key=lambda item:
+        item[1].get(
+            "updated_at",
+            ""
+        ),
+        reverse=True
     )
 
-    if user_chats:
+    if not user_chats:
 
-        sorted_chats = sorted(
-            user_chats.items(),
-            key=lambda item: item[1].get(
-                "updated_at",
-                ""
-            ),
-            reverse=True
+        st.caption(
+            "No conversations yet."
         )
 
-        for chat_id, chat in sorted_chats:
+    else:
+
+        for chat_id, chat in user_chats:
 
             title = chat.get(
                 "title",
@@ -1345,166 +1347,126 @@ with st.sidebar:
             if len(title) > 30:
                 title = title[:30] + "..."
 
+            is_current = (
+                chat_id
+                == st.session_state.current_chat_id
+            )
+
+            button_text = (
+                "● " + title
+                if is_current
+                else title
+            )
+
             if st.button(
-                title,
+                button_text,
                 key=f"chat_{chat_id}",
                 use_container_width=True
             ):
 
-                st.session_state.current_chat_id = chat_id
-
-                st.session_state.messages = chat.get(
-                    "messages",
-                    []
-                )
-
-                st.session_state.document_name = chat.get(
-                    "document_name",
-                    ""
-                )
-
-                st.session_state.document_text = chat.get(
-                    "document_text",
-                    ""
-                )
-
-                st.session_state.source_type = chat.get(
-                    "source_type",
-                    ""
-                )
-
-                st.session_state.chat_total_tokens = chat.get(
-                    "total_tokens",
-                    0
-                )
-
-                if st.session_state.document_text:
-
-                    try:
-
-                        st.session_state.retriever = (
-                            rebuild_retriever_from_text(
-                                st.session_state.document_text
-                            )
-                        )
-
-                    except Exception:
-
-                        st.session_state.retriever = None
-
-                else:
-
-                    st.session_state.retriever = None
+                load_chat(chat_id)
 
                 st.rerun()
 
-    else:
-
-        st.caption(
-            "No conversations yet."
-        )
-
-
-    st.divider()
-
+    st.markdown("---")
 
     # --------------------------------------------------------
-    # USAGE
+    # Usage
     # --------------------------------------------------------
 
     st.markdown(
         "### Usage"
     )
 
-    usage = get_user_usage(
-        st.session_state.username
-    )
-
     st.markdown(
         f"""
-        <div class="usage-card">
+        <div class="usage-box">
 
-            Requests:
-            <b>{usage.get("requests", 0)}</b>
-            <br>
+            <div class="usage-row">
+                <span>Requests</span>
+                <strong>
+                    {user_usage.get("requests", 0)}
+                </strong>
+            </div>
 
-            Input:
-            <b>{usage.get("input_tokens", 0)}</b>
-            <br>
+            <div class="usage-row">
+                <span>Input Tokens</span>
+                <strong>
+                    {user_usage.get("input_tokens", 0)}
+                </strong>
+            </div>
 
-            Output:
-            <b>{usage.get("output_tokens", 0)}</b>
-            <br>
+            <div class="usage-row">
+                <span>Output Tokens</span>
+                <strong>
+                    {user_usage.get("output_tokens", 0)}
+                </strong>
+            </div>
 
-            Total:
-            <b>{usage.get("total_tokens", 0)}</b>
+            <div class="usage-divider"></div>
+
+            <div class="usage-row usage-total">
+                <span>Total Tokens</span>
+                <strong>
+                    {user_usage.get("total_tokens", 0)}
+                </strong>
+            </div>
 
         </div>
         """,
         unsafe_allow_html=True
     )
 
-
-    st.write("")
-
+    st.markdown("")
 
     # --------------------------------------------------------
-    # SETTINGS
+    # Settings
     # --------------------------------------------------------
 
-    if st.button(
-        "⚙ Settings",
-        use_container_width=True
-    ):
+    with st.expander("⚙ Settings"):
 
-        st.session_state.show_settings = (
-            not st.session_state.show_settings
+        st.write(
+            f"Logged in as: **{st.session_state.username}**"
         )
 
-        st.rerun()
+        st.write(
+            f"Maximum response: **{MAX_RESPONSE_TOKENS} tokens**"
+        )
 
+        st.write(
+            f"Retriever documents: **{RETRIEVER_K}**"
+        )
 
     # --------------------------------------------------------
-    # DELETE CURRENT CHAT
+    # Delete Chat
     # --------------------------------------------------------
 
     if st.session_state.current_chat_id:
 
         if st.button(
-            "🗑 Delete Chat",
+            "Delete Current Chat",
             use_container_width=True
         ):
 
-            delete_chat(
-                st.session_state.username,
+            chat_id = (
                 st.session_state.current_chat_id
             )
 
-            new_chat_id = create_chat(
-                st.session_state.username
-            )
+            if chat_id in chats:
 
-            st.session_state.current_chat_id = (
-                new_chat_id
-            )
+                del chats[chat_id]
 
-            st.session_state.messages = []
+                save_json(
+                    CHATS_FILE,
+                    chats
+                )
 
-            st.session_state.retriever = None
-
-            st.session_state.document_text = ""
-
-            st.session_state.document_name = ""
-
-            st.session_state.source_type = ""
-
-            st.session_state.chat_total_tokens = 0
+            create_new_chat()
 
             st.rerun()
 
-
     # --------------------------------------------------------
-    # LOGOUT
+    # Logout
     # --------------------------------------------------------
 
     if st.button(
@@ -1514,10 +1476,8 @@ with st.sidebar:
 
         st.session_state.logged_in = False
         st.session_state.username = ""
-
         st.session_state.current_chat_id = None
         st.session_state.messages = []
-
         st.session_state.retriever = None
 
         st.rerun()
@@ -1527,12 +1487,13 @@ with st.sidebar:
 # MAIN HEADER
 # ============================================================
 
-st.html(
+st.markdown(
     """
     <div class="app-header">
 
         <div class="app-title">
-            ✦ AI Document Intelligence
+            <span class="star">✦</span>
+            AI Document Intelligence
         </div>
 
         <div class="app-subtitle">
@@ -1540,50 +1501,21 @@ st.html(
         </div>
 
     </div>
-    """
+    """,
+    unsafe_allow_html=True
 )
 
 
 # ============================================================
-# SETTINGS PANEL
-# ============================================================
-
-if st.session_state.show_settings:
-
-    with st.expander(
-        "⚙ Settings",
-        expanded=True
-    ):
-
-        st.markdown(
-            "### Response Settings"
-        )
-
-        response_length = st.slider(
-            "Maximum response tokens",
-            min_value=50,
-            max_value=200,
-            value=st.session_state.response_length,
-            step=10
-        )
-
-        st.session_state.response_length = (
-            response_length
-        )
-
-        st.caption(
-            "Lower values give shorter and usually faster responses."
-        )
-
-
-# ============================================================
-# DOCUMENT / WEBSITE UPLOAD AREA
+# SOURCE UPLOAD
 # ============================================================
 
 with st.expander(
-    "📎 Add a document or website",
+    "📎  Add a document or website",
     expanded=(
-        st.session_state.retriever is None
+        not bool(
+            st.session_state.document_text
+        )
     )
 ):
 
@@ -1593,9 +1525,9 @@ with st.expander(
             "Document",
             "Website URL"
         ],
-        horizontal=True
+        horizontal=True,
+        key="source_selector"
     )
-
 
     # ========================================================
     # DOCUMENT
@@ -1611,73 +1543,60 @@ with st.expander(
                 "docx",
                 "xlsx"
             ],
-            key="uploaded_file"
+            key="document_uploader"
         )
 
-        if uploaded_file is not None:
+        if uploaded_file:
 
-            if st.button(
-                "Process Document",
-                use_container_width=True
+            # Only process if new file
+
+            if (
+                uploaded_file.name
+                != st.session_state.document_name
             ):
 
                 with st.spinner(
-                    "Reading and indexing document..."
+                    "Reading document..."
                 ):
 
                     try:
 
-                        documents = process_uploaded_file(
+                        text = process_document(
                             uploaded_file
                         )
 
-                        full_text = "\n\n".join(
-                            doc.page_content
-                            for doc in documents
-                        )
+                        if not text.strip():
 
-                        retriever = build_retriever(
-                            documents
-                        )
+                            st.error(
+                                "No readable text was found."
+                            )
 
-                        st.session_state.retriever = (
-                            retriever
-                        )
+                        else:
 
-                        st.session_state.document_text = (
-                            full_text
-                        )
+                            with st.spinner(
+                                "Building semantic search..."
+                            ):
 
-                        st.session_state.document_name = (
-                            uploaded_file.name
-                        )
+                                retriever = build_retriever(
+                                    text
+                                )
 
-                        st.session_state.source_type = (
-                            "Document"
-                        )
+                            st.session_state.document_text = text
+                            st.session_state.document_name = uploaded_file.name
+                            st.session_state.source_type = "Document"
+                            st.session_state.retriever = retriever
 
-                        st.success(
-                            "Document processed successfully."
-                        )
+                            save_current_chat()
 
-                        save_chat(
-                            st.session_state.username,
-                            st.session_state.current_chat_id,
-                            st.session_state.messages,
-                            st.session_state.document_name,
-                            st.session_state.document_text,
-                            st.session_state.source_type,
-                            st.session_state.chat_total_tokens
-                        )
-
-                        st.rerun()
+                            st.success(
+                                f"{uploaded_file.name} is ready."
+                            )
 
                     except Exception as e:
 
                         st.error(
-                            f"Error processing document: {e}"
+                            f"Could not process the document: {e}"
                         )
-
 
     # ========================================================
     # WEBSITE
@@ -1685,17 +1604,18 @@ with st.expander(
 
     else:
 
-        website_url = st.text_input(
+        url = st.text_input(
             "Website URL",
-            placeholder="https://example.com"
+            placeholder="https://example.com",
+            key="website_url"
         )
 
         if st.button(
-            "Process Website",
-            use_container_width=True
+            "Load Website",
+            use_container_width=False
         ):
 
-            if not website_url.strip():
+            if not url.strip():
 
                 st.warning(
                     "Please enter a website URL."
@@ -1704,95 +1624,128 @@ with st.expander(
             else:
 
                 with st.spinner(
-                    "Reading and indexing website..."
+                    "Reading website..."
                 ):
 
                     try:
 
-                        documents = process_website(
-                            website_url.strip()
+                        text = process_website(
+                            url.strip()
                         )
 
-                        full_text = "\n\n".join(
-                            doc.page_content
-                            for doc in documents
-                        )
+                        if not text.strip():
 
-                        retriever = build_retriever(
-                            documents
-                        )
+                            st.error(
+                                "No readable text was found on this website."
+                            )
 
-                        st.session_state.retriever = (
-                            retriever
-                        )
+                        else:
 
-                        st.session_state.document_text = (
-                            full_text
-                        )
+                            with st.spinner(
+                                "Building semantic search..."
+                            ):
 
-                        st.session_state.document_name = (
-                            website_url.strip()
-                        )
+                                retriever = build_retriever(
+                                    text
+                                )
 
-                        st.session_state.source_type = (
-                            "Website"
-                        )
+                            st.session_state.document_text = text
+                            st.session_state.document_name = url.strip()
+                            st.session_state.source_type = "Website"
+                            st.session_state.retriever = retriever
 
-                        st.success(
-                            "Website processed successfully."
-                        )
+                            save_current_chat()
 
-                        save_chat(
-                            st.session_state.username,
-                            st.session_state.current_chat_id,
-                            st.session_state.messages,
-                            st.session_state.document_name,
-                            st.session_state.document_text,
-                            st.session_state.source_type,
-                            st.session_state.chat_total_tokens
-                        )
-
-                        st.rerun()
+                            st.success(
+                                "Website is ready."
+                            )
 
                     except Exception as e:
 
                         st.error(
-                            f"Error processing website: {e}"
+                            f"Could not load website: {e}"
                         )
 
 
 # ============================================================
-# SOURCE BADGE
+# SOURCE INFORMATION
 # ============================================================
 
-if st.session_state.document_name:
+if st.session_state.document_text:
 
-    icon = (
-        "🌐"
-        if st.session_state.source_type == "Website"
-        else "📄"
+    source_name = (
+        st.session_state.document_name
+        or "Unknown source"
     )
 
-    st.html(
+    st.markdown(
         f"""
-        <div class="source-badge">
-            {icon} {st.session_state.document_name}
+        <div class="source-info">
+            <strong>Source:</strong> {source_name}
         </div>
-        """
+        """,
+        unsafe_allow_html=True
     )
 
 
 # ============================================================
-# WELCOME MESSAGE
+# CHAT HISTORY
+# ============================================================
+
+if st.session_state.messages:
+
+    for message in st.session_state.messages:
+
+        if message["role"] == "user":
+
+            with st.chat_message("user"):
+
+                st.markdown(
+                    message["content"]
+                )
+
+        else:
+
+            with st.chat_message("assistant"):
+
+                st.markdown(
+                    message["content"]
+                )
+
+                if "input_tokens" in message:
+
+                    st.markdown(
+                        f"""
+                        <div class="token-info">
+                            <strong>
+                                {message.get("input_tokens", 0)}
+                            </strong>
+                            input ·
+                            <strong>
+                                {message.get("output_tokens", 0)}
+                            </strong>
+                            output ·
+                            <strong>
+                                {message.get("total_tokens", 0)}
+                            </strong>
+                            total
+                        </div>
+                        """,
+                        unsafe_allow_html=True
+                    )
+
+
+# ============================================================
+# WELCOME SCREEN
 # ============================================================
 
 if not st.session_state.messages:
 
     greeting = get_greeting()
 
-    st.html(
+    st.markdown(
         f"""
-        <div class="welcome">
+        <div class="welcome-area">
 
             <div class="welcome-symbol">
                 ✦
@@ -1807,35 +1760,29 @@ if not st.session_state.messages:
             </div>
 
         </div>
-        """
+        """,
+        unsafe_allow_html=True
     )
 
 
 # ============================================================
-# DISPLAY CHAT HISTORY
+# CHAT COMPOSER
 # ============================================================
 
-for message in st.session_state.messages:
-
-    with st.chat_message(
-        message["role"]
-    ):
-
-        st.markdown(
-            message["content"]
-        )
-
-
-# ============================================================
-# TOKEN LIMIT NEAR CHAT BOX
-# ============================================================
-
-st.html(
-    f"""
-    <div class="token-limit-bar">
-        Max response: {st.session_state.response_length} tokens
-    </div>
+st.markdown(
     """
+    <div class="composer-wrapper">
+
+        <div class="max-token-badge">
+            Max response:
+            <strong>100 tokens</strong>
+        </div>
+
+        <div style="clear:both;"></div>
+
+    </div>
+    """,
+    unsafe_allow_html=True
 )
 
 
@@ -1843,58 +1790,64 @@ st.html(
 # CHAT INPUT
 # ============================================================
 
-question = st.chat_input(
-    "Ask anything about your document..."
+prompt = st.chat_input(
+    "Ask anything about your document...",
+    key="chat_input"
 )
 
 
 # ============================================================
-# HANDLE QUESTION
+# PROCESS QUESTION
 # ============================================================
 
-if question:
+if prompt:
 
-    question = question.strip()
+    prompt = prompt.strip()
 
-    if not question:
+    if not prompt:
         st.stop()
 
-
     # --------------------------------------------------------
-    # USER MESSAGE
+    # Add user message
     # --------------------------------------------------------
 
     st.session_state.messages.append(
         {
             "role": "user",
-            "content": question
+            "content": prompt,
         }
     )
 
+    # --------------------------------------------------------
+    # Display user message
+    # --------------------------------------------------------
+
     with st.chat_message("user"):
 
-        st.markdown(
-            question
-        )
-
+        st.markdown(prompt)
 
     # --------------------------------------------------------
-    # CHECK DOCUMENT
+    # Generate answer
     # --------------------------------------------------------
 
-    if st.session_state.retriever is None:
+    with st.chat_message("assistant"):
 
-        answer = (
-            "Please upload a document or process "
-            "a website first."
-        )
+        if not st.session_state.retriever:
 
-        input_tokens = 0
-        output_tokens = 0
+            answer = (
+                "Please upload a document or add a "
+                "website before asking a question."
+            )
 
-    else:
+            input_tokens = count_tokens(
+                prompt
+            )
 
-        with st.chat_message("assistant"):
+            output_tokens = count_tokens(
+                answer
+            )
+
+        else:
 
             with st.spinner(
                 "Thinking..."
@@ -1902,83 +1855,121 @@ if question:
 
                 try:
 
-                    generator, tokenizer = (
-                        load_llm()
-                    )
-
-                    answer, input_tokens, output_tokens = (
-                        generate_answer(
-                            question,
-                            st.session_state.retriever,
-                            generator,
-                            tokenizer
-                        )
+                    (
+                        answer,
+                        input_tokens,
+                        output_tokens,
+                    ) = answer_question(
+                        prompt
                     )
 
                 except Exception as e:
 
                     answer = (
-                        f"Sorry, I couldn't generate "
-                        f"the answer. Error: {e}"
+                        "Sorry, I couldn't process "
+                        "your question."
                     )
 
-                    input_tokens = 0
-                    output_tokens = 0
+                    input_tokens = count_tokens(
+                        prompt
+                    )
 
-            st.markdown(
-                answer
-            )
+                    output_tokens = count_tokens(
+                        answer
+                    )
 
+                    st.error(
+                        str(e)
+                    )
+
+        # ----------------------------------------------------
+        # Show answer
+        # ----------------------------------------------------
+
+        st.markdown(answer)
+
+        total_tokens = (
+            input_tokens
+            + output_tokens
+        )
+
+        # ----------------------------------------------------
+        # Token information
+        # ----------------------------------------------------
+
+        st.markdown(
+            f"""
+            <div class="token-info">
+                <strong>{input_tokens}</strong>
+                input ·
+                <strong>{output_tokens}</strong>
+                output ·
+                <strong>{total_tokens}</strong>
+                total
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
 
     # --------------------------------------------------------
-    # SAVE ASSISTANT MESSAGE
+    # Save assistant message
     # --------------------------------------------------------
 
     st.session_state.messages.append(
         {
             "role": "assistant",
-            "content": answer
+            "content": answer,
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "total_tokens": total_tokens,
         }
     )
 
-
     # --------------------------------------------------------
-    # UPDATE TOKEN USAGE
+    # Update user usage
     # --------------------------------------------------------
 
-    total_tokens = (
-        input_tokens +
-        output_tokens
+    user_usage["requests"] += 1
+
+    user_usage["input_tokens"] += input_tokens
+
+    user_usage["output_tokens"] += output_tokens
+
+    user_usage["total_tokens"] += total_tokens
+
+    save_json(
+        USAGE_FILE,
+        usage_data
     )
 
-    st.session_state.chat_total_tokens += (
-        total_tokens
-    )
-
-    update_user_usage(
-        st.session_state.username,
-        input_tokens,
-        output_tokens
-    )
-
-
     # --------------------------------------------------------
-    # SAVE CHAT
+    # Update chat token usage
     # --------------------------------------------------------
 
-    save_chat(
-        st.session_state.username,
-        st.session_state.current_chat_id,
-        st.session_state.messages,
-        st.session_state.document_name,
-        st.session_state.document_text,
-        st.session_state.source_type,
-        st.session_state.chat_total_tokens
-    )
+    if st.session_state.current_chat_id:
 
+        chat_id = (
+            st.session_state.current_chat_id
+        )
+
+        if chat_id in chats:
+
+            chats[chat_id]["total_tokens"] = (
+                chats[chat_id].get(
+                    "total_tokens",
+                    0
+                )
+                + total_tokens
+            )
 
     # --------------------------------------------------------
-    # RERUN TO UPDATE SIDEBAR USAGE
+    # Save chat
+    # --------------------------------------------------------
+
+    save_current_chat()
+
+    # --------------------------------------------------------
+    # Rerun
     # --------------------------------------------------------
 
     st.rerun()
