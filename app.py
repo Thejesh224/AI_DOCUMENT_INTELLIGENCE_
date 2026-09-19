@@ -12,15 +12,10 @@ import tempfile
 import streamlit as st
 import pandas as pd
 
+from datetime import datetime
 from dotenv import load_dotenv
-from langchain_core.documents import Document
-from langchain_community.document_loaders import PyPDFLoader
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_community.embeddings import HuggingFaceEmbeddings
-from langchain_community.vectorstores import FAISS
-from langchain_core.documents import Document
 
-from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
+
 # ============================================================
 # STREAMLIT CONFIG
 # ============================================================
@@ -33,6 +28,7 @@ st.set_page_config(
 
 load_dotenv()
 
+
 # ============================================================
 # IMPORTS
 # ============================================================
@@ -42,11 +38,16 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain_core.documents import Document
-from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
+
+from transformers import (
+    AutoTokenizer,
+    AutoModelForCausalLM,
+    pipeline
+)
 
 
 # ============================================================
-# FILES
+# FILE STORAGE
 # ============================================================
 
 USER_FILE = "users.json"
@@ -60,6 +61,7 @@ CHAT_FILE = "chats.json"
 def load_users():
 
     if not os.path.exists(USER_FILE):
+
         data = {
             "users": {},
             "count": 0
@@ -71,10 +73,12 @@ def load_users():
         return data
 
     try:
+
         with open(USER_FILE, "r") as f:
             data = json.load(f)
 
     except Exception:
+
         data = {
             "users": {},
             "count": 0
@@ -102,10 +106,12 @@ def load_chats():
         return {}
 
     try:
+
         with open(CHAT_FILE, "r") as f:
             return json.load(f)
 
     except Exception:
+
         return {}
 
 
@@ -119,25 +125,38 @@ def save_chats(data):
 # SESSION STATE
 # ============================================================
 
-defaults = {
-    "logged_in": False,
-    "username": "",
-    "current_chat_id": None,
-    "messages": [],
-    "retriever": None,
-    "document_text": "",
-    "document_name": "",
-    "chat_loaded": False
-}
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
 
-for key, value in defaults.items():
+if "username" not in st.session_state:
+    st.session_state.username = ""
 
-    if key not in st.session_state:
-        st.session_state[key] = value
+if "current_chat_id" not in st.session_state:
+    st.session_state.current_chat_id = None
+
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+
+if "retriever" not in st.session_state:
+    st.session_state.retriever = None
+
+if "document_text" not in st.session_state:
+    st.session_state.document_text = ""
+
+if "document_name" not in st.session_state:
+    st.session_state.document_name = ""
+
+if "chat_loaded" not in st.session_state:
+    st.session_state.chat_loaded = False
+
+# This changes whenever New Chat is clicked.
+# It forces Streamlit to create a fresh uploader.
+if "uploader_key" not in st.session_state:
+    st.session_state.uploader_key = 0
 
 
 # ============================================================
-# EMBEDDINGS
+# EMBEDDING MODEL
 # ============================================================
 
 @st.cache_resource
@@ -179,7 +198,7 @@ def load_llm():
 
 
 # ============================================================
-# AUTHENTICATION
+# AUTHENTICATION PAGE
 # ============================================================
 
 def authentication_page():
@@ -197,9 +216,10 @@ def authentication_page():
 
     data = load_users()
 
-    # --------------------------------------------------------
+
+    # ========================================================
     # LOGIN
-    # --------------------------------------------------------
+    # ========================================================
 
     if option == "Login":
 
@@ -232,8 +252,11 @@ def authentication_page():
                 st.session_state.retriever = None
                 st.session_state.document_text = ""
                 st.session_state.document_name = ""
+                st.session_state.chat_loaded = False
 
-                st.success("Login successful!")
+                st.success(
+                    f"Welcome {username}!"
+                )
 
                 st.rerun()
 
@@ -243,9 +266,10 @@ def authentication_page():
                     "Invalid username or password."
                 )
 
-    # --------------------------------------------------------
+
+    # ========================================================
     # CREATE ACCOUNT
-    # --------------------------------------------------------
+    # ========================================================
 
     else:
 
@@ -290,7 +314,7 @@ def authentication_page():
 
 
 # ============================================================
-# STOP IF NOT LOGGED IN
+# PROTECT APPLICATION
 # ============================================================
 
 if not st.session_state.logged_in:
@@ -301,10 +325,12 @@ if not st.session_state.logged_in:
 
 
 # ============================================================
-# MAIN APP
+# MAIN TITLE
 # ============================================================
 
-st.title("📄 AI Document Intelligence System")
+st.title(
+    "📄 AI Document Intelligence System"
+)
 
 st.caption(
     "Upload documents and ask questions using RAG and semantic search."
@@ -315,7 +341,9 @@ st.caption(
 # SIDEBAR
 # ============================================================
 
-st.sidebar.title("💬 Chat History")
+st.sidebar.title(
+    "💬 Chat History"
+)
 
 st.sidebar.write(
     f"👤 {st.session_state.username}"
@@ -331,28 +359,38 @@ if st.sidebar.button(
     use_container_width=True
 ):
 
+    # Create new chat ID
     st.session_state.current_chat_id = str(
         uuid.uuid4()
     )
 
+    # Clear old messages
     st.session_state.messages = []
 
+    # Clear old document
     st.session_state.retriever = None
-
     st.session_state.document_text = ""
-
     st.session_state.document_name = ""
 
+    # Create fresh file uploader
+    st.session_state.uploader_key += 1
+
+    # Mark as new chat
     st.session_state.chat_loaded = False
 
     st.rerun()
 
 
 # ============================================================
-# LOAD USER CHATS
+# LOAD ALL CHATS
 # ============================================================
 
 all_chats = load_chats()
+
+
+# ============================================================
+# GET CURRENT USER CHATS
+# ============================================================
 
 user_chats = []
 
@@ -365,9 +403,12 @@ for chat_id, chat in all_chats.items():
         )
 
 
-# Sort newest first
+# Newest chats first
 user_chats.sort(
-    key=lambda x: x[1].get("updated_at", ""),
+    key=lambda x: x[1].get(
+        "updated_at",
+        ""
+    ),
     reverse=True
 )
 
@@ -384,6 +425,7 @@ for chat_id, chat in user_chats:
     )
 
     if len(title) > 35:
+
         title = title[:35] + "..."
 
     if st.sidebar.button(
@@ -417,6 +459,9 @@ for chat_id, chat in user_chats:
 
             st.session_state.chat_loaded = True
 
+            # Clear visible uploader
+            st.session_state.uploader_key += 1
+
             # Rebuild retriever
             if st.session_state.document_text:
 
@@ -444,7 +489,9 @@ for chat_id, chat in user_chats:
 
                     st.session_state.retriever = (
                         vectorstore.as_retriever(
-                            search_kwargs={"k": 4}
+                            search_kwargs={
+                                "k": 4
+                            }
                         )
                     )
 
@@ -455,6 +502,10 @@ for chat_id, chat in user_chats:
                     )
 
                     st.exception(e)
+
+            else:
+
+                st.session_state.retriever = None
 
             st.rerun()
 
@@ -477,13 +528,18 @@ if (
             st.session_state.current_chat_id
         ]
 
-        save_chats(all_chats)
+        save_chats(
+            all_chats
+        )
 
         st.session_state.current_chat_id = None
         st.session_state.messages = []
         st.session_state.retriever = None
         st.session_state.document_text = ""
         st.session_state.document_name = ""
+        st.session_state.chat_loaded = False
+
+        st.session_state.uploader_key += 1
 
         st.rerun()
 
@@ -506,12 +562,15 @@ if st.sidebar.button(
     st.session_state.retriever = None
     st.session_state.document_text = ""
     st.session_state.document_name = ""
+    st.session_state.chat_loaded = False
+
+    st.session_state.uploader_key += 1
 
     st.rerun()
 
 
 # ============================================================
-# USER COUNT
+# REGISTERED USERS
 # ============================================================
 
 user_data = load_users()
@@ -519,15 +578,57 @@ user_data = load_users()
 st.sidebar.divider()
 
 st.sidebar.write(
-    f"👥 Registered Users: {user_data.get('count', 0)}"
+    f"👥 Registered Users: "
+    f"{user_data.get('count', 0)}"
 )
 
 
 # ============================================================
-# FILE UPLOAD
+# NEW CHAT GREETING
 # ============================================================
 
-st.subheader("📁 Upload Document")
+if (
+    not st.session_state.messages
+    and not st.session_state.document_name
+):
+
+    current_hour = datetime.now().hour
+
+    if current_hour < 12:
+
+        greeting = "Good Morning"
+
+    elif current_hour < 17:
+
+        greeting = "Good Afternoon"
+
+    elif current_hour < 21:
+
+        greeting = "Good Evening"
+
+    else:
+
+        greeting = "Good Evening"
+
+
+    st.markdown(
+        f"""
+        ### 👋 {greeting}, {st.session_state.username}!
+
+        Welcome to a new chat.
+
+        📄 Upload a document and ask me anything about it.
+        """
+    )
+
+
+# ============================================================
+# UPLOAD DOCUMENT
+# ============================================================
+
+st.subheader(
+    "📁 Upload Document"
+)
 
 uploaded_file = st.file_uploader(
     "Upload PDF, TXT, DOCX or XLSX",
@@ -536,7 +637,8 @@ uploaded_file = st.file_uploader(
         "txt",
         "docx",
         "xlsx"
-    ]
+    ],
+    key=f"document_uploader_{st.session_state.uploader_key}"
 )
 
 
@@ -546,6 +648,7 @@ uploaded_file = st.file_uploader(
 
 if uploaded_file:
 
+    # Only process a new document
     if (
         st.session_state.document_name
         != uploaded_file.name
@@ -563,9 +666,10 @@ if uploaded_file:
                     .lower()
                 )
 
-                # ------------------------------------------------
+
+                # ====================================================
                 # PDF
-                # ------------------------------------------------
+                # ====================================================
 
                 if file_type == "pdf":
 
@@ -590,9 +694,10 @@ if uploaded_file:
                         pdf_path
                     )
 
-                # ------------------------------------------------
+
+                # ====================================================
                 # TXT
-                # ------------------------------------------------
+                # ====================================================
 
                 elif file_type == "txt":
 
@@ -607,9 +712,10 @@ if uploaded_file:
                         )
                     ]
 
-                # ------------------------------------------------
+
+                # ====================================================
                 # DOCX
-                # ------------------------------------------------
+                # ====================================================
 
                 elif file_type == "docx":
 
@@ -630,9 +736,10 @@ if uploaded_file:
                         )
                     ]
 
-                # ------------------------------------------------
+
+                # ====================================================
                 # XLSX
-                # ------------------------------------------------
+                # ====================================================
 
                 elif file_type == "xlsx":
 
@@ -650,6 +757,7 @@ if uploaded_file:
                         )
                     ]
 
+
                 else:
 
                     st.error(
@@ -658,9 +766,10 @@ if uploaded_file:
 
                     st.stop()
 
-                # ------------------------------------------------
+
+                # ====================================================
                 # SAVE DOCUMENT TEXT
-                # ------------------------------------------------
+                # ====================================================
 
                 document_text = "\n\n".join(
                     doc.page_content
@@ -675,9 +784,10 @@ if uploaded_file:
                     uploaded_file.name
                 )
 
-                # ------------------------------------------------
+
+                # ====================================================
                 # SPLIT DOCUMENT
-                # ------------------------------------------------
+                # ====================================================
 
                 splitter = RecursiveCharacterTextSplitter(
                     chunk_size=1000,
@@ -688,20 +798,27 @@ if uploaded_file:
                     docs
                 )
 
-                # ------------------------------------------------
-                # EMBEDDINGS
-                # ------------------------------------------------
+
+                # ====================================================
+                # LOAD EMBEDDINGS
+                # ====================================================
 
                 embeddings = load_embeddings()
 
-                # ------------------------------------------------
-                # FAISS
-                # ------------------------------------------------
+
+                # ====================================================
+                # CREATE FAISS VECTOR STORE
+                # ====================================================
 
                 vectorstore = FAISS.from_documents(
                     chunks,
                     embeddings
                 )
+
+
+                # ====================================================
+                # CREATE RETRIEVER
+                # ====================================================
 
                 st.session_state.retriever = (
                     vectorstore.as_retriever(
@@ -711,11 +828,16 @@ if uploaded_file:
                     )
                 )
 
+
+                # Clear old messages when a new document is uploaded
                 st.session_state.messages = []
 
+
                 st.success(
-                    f"✅ {uploaded_file.name} processed successfully!"
+                    f"✅ {uploaded_file.name} "
+                    f"processed successfully!"
                 )
+
 
             except Exception as e:
 
@@ -727,7 +849,7 @@ if uploaded_file:
 
 
 # ============================================================
-# DOCUMENT STATUS
+# CURRENT DOCUMENT
 # ============================================================
 
 if st.session_state.document_name:
@@ -739,12 +861,14 @@ if st.session_state.document_name:
 
 
 # ============================================================
-# CHAT
+# CHAT SECTION
 # ============================================================
 
 st.divider()
 
-st.subheader("💬 Ask Questions")
+st.subheader(
+    "💬 Ask Questions"
+)
 
 
 # ============================================================
@@ -763,9 +887,13 @@ for message in st.session_state.messages:
         ""
     )
 
-    with st.chat_message(role):
+    with st.chat_message(
+        role
+    ):
 
-        st.write(content)
+        st.write(
+            content
+        )
 
 
 # ============================================================
@@ -780,17 +908,18 @@ if st.session_state.retriever:
 
     if question:
 
-        # --------------------------------------------------------
-        # SHOW USER MESSAGE
-        # --------------------------------------------------------
+        # ====================================================
+        # USER MESSAGE
+        # ====================================================
 
-        with st.chat_message("user"):
+        with st.chat_message(
+            "user"
+        ):
 
-            st.write(question)
+            st.write(
+                question
+            )
 
-        # --------------------------------------------------------
-        # SAVE USER MESSAGE
-        # --------------------------------------------------------
 
         st.session_state.messages.append(
             {
@@ -799,9 +928,10 @@ if st.session_state.retriever:
             }
         )
 
-        # --------------------------------------------------------
+
+        # ====================================================
         # SEARCH DOCUMENT
-        # --------------------------------------------------------
+        # ====================================================
 
         with st.spinner(
             "Searching the document..."
@@ -812,7 +942,9 @@ if st.session_state.retriever:
                 docs = (
                     st.session_state
                     .retriever
-                    .invoke(question)
+                    .invoke(
+                        question
+                    )
                 )
 
                 context = "\n\n".join(
@@ -830,22 +962,25 @@ if st.session_state.retriever:
 
                 st.stop()
 
-        # --------------------------------------------------------
-        # CREATE RAG PROMPT
-        # --------------------------------------------------------
+
+        # ====================================================
+        # RAG PROMPT
+        # ====================================================
 
         prompt = f"""
-You are a document question-answering assistant.
+You are an AI document question-answering assistant.
 
 Answer the user's question using ONLY the information
-provided in the document context below.
+provided in the document context.
+
+Do not make up information.
 
 If the answer is not available in the document,
-say:
+say exactly:
 
 "I could not find that information in the uploaded document."
 
-Do not make up information.
+Keep the answer clear and easy to understand.
 
 DOCUMENT CONTEXT:
 {context}
@@ -856,9 +991,10 @@ USER QUESTION:
 ANSWER:
 """
 
-        # --------------------------------------------------------
-        # LOAD AI MODEL
-        # --------------------------------------------------------
+
+        # ====================================================
+        # GENERATE ANSWER
+        # ====================================================
 
         with st.spinner(
             "AI is generating the answer..."
@@ -876,11 +1012,13 @@ ANSWER:
                     "generated_text"
                 ].strip()
 
+
                 if not answer:
 
                     answer = (
                         "I could not generate an answer."
                     )
+
 
             except Exception as e:
 
@@ -890,24 +1028,24 @@ ANSWER:
                 )
 
                 st.error(
-                    "AI model error"
+                    "AI model error."
                 )
 
                 st.exception(e)
 
-        # --------------------------------------------------------
-        # SHOW ANSWER
-        # --------------------------------------------------------
+
+        # ====================================================
+        # ASSISTANT MESSAGE
+        # ====================================================
 
         with st.chat_message(
             "assistant"
         ):
 
-            st.write(answer)
+            st.write(
+                answer
+            )
 
-        # --------------------------------------------------------
-        # SAVE ASSISTANT MESSAGE
-        # --------------------------------------------------------
 
         st.session_state.messages.append(
             {
@@ -916,31 +1054,42 @@ ANSWER:
             }
         )
 
-        # ========================================================
+
+        # ====================================================
         # SAVE CHAT
-        # ========================================================
+        # ====================================================
 
         all_chats = load_chats()
 
-        # Create chat if necessary
+
+        # Create chat ID if necessary
         if not st.session_state.current_chat_id:
 
             st.session_state.current_chat_id = str(
                 uuid.uuid4()
             )
 
+
         chat_id = (
             st.session_state.current_chat_id
         )
 
-        # Create title from first question
+
+        # ====================================================
+        # CHAT TITLE
+        # ====================================================
+
         title = question.strip()
 
         if len(title) > 45:
 
             title = title[:45] + "..."
 
-        # Existing chat
+
+        # ====================================================
+        # UPDATE EXISTING CHAT
+        # ====================================================
+
         if chat_id in all_chats:
 
             all_chats[chat_id]["messages"] = (
@@ -956,10 +1105,14 @@ ANSWER:
             )
 
             all_chats[chat_id]["updated_at"] = (
-                str(__import__("datetime").datetime.now())
+                datetime.now().isoformat()
             )
 
-        # New chat
+
+        # ====================================================
+        # CREATE NEW CHAT
+        # ====================================================
+
         else:
 
             all_chats[chat_id] = {
@@ -980,12 +1133,14 @@ ANSWER:
                     st.session_state.document_name,
 
                 "updated_at":
-                    str(__import__("datetime").datetime.now())
+                    datetime.now().isoformat()
             }
+
 
         save_chats(
             all_chats
         )
+
 
 else:
 
