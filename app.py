@@ -37,18 +37,18 @@ st.set_page_config(
 
 
 # ============================================================
-# APPLICATION SETTINGS
+# FILE NAMES
 # ============================================================
-
-MAX_RESPONSE_TOKENS = 100
 
 USERS_FILE = "users.json"
 CHATS_FILE = "chats.json"
 USAGE_FILE = "usage.json"
 
+DEFAULT_MAX_TOKENS = 100
+
 
 # ============================================================
-# CLAUDE-STYLE UI
+# LIGHT CLAUDE-STYLE DESIGN
 # ============================================================
 
 st.markdown(
@@ -59,25 +59,13 @@ st.markdown(
    GLOBAL
 ========================================================== */
 
-:root {
-    --bg: #f7f7f5;
-    --sidebar: #eeeeea;
-    --card: #ffffff;
-    --border: #deded7;
-    --text: #292925;
-    --muted: #777770;
-    --soft: #e9e9e3;
-    --accent: #d97757;
-    --accent-dark: #bd6042;
-}
-
 .stApp {
-    background: var(--bg) !important;
-    color: var(--text) !important;
+    background-color: #f7f7f5 !important;
+    color: #292925 !important;
 }
 
 .main {
-    background: var(--bg) !important;
+    background-color: #f7f7f5 !important;
 }
 
 .block-container {
@@ -88,14 +76,10 @@ st.markdown(
 
 
 /* ==========================================================
-   HIDE STREAMLIT DEFAULT UI
+   HIDE STREAMLIT DEFAULTS
 ========================================================== */
 
 #MainMenu {
-    visibility: hidden !important;
-}
-
-footer {
     visibility: hidden !important;
 }
 
@@ -103,17 +87,19 @@ header {
     visibility: hidden !important;
 }
 
+footer {
+    visibility: hidden !important;
+}
+
 
 /* ==========================================================
-   GENERAL TEXT
+   ALL TEXT
 ========================================================== */
 
-.stApp,
 .stApp p,
-.stApp span,
 .stApp label,
-.stApp div {
-    color: var(--text);
+.stApp span {
+    color: #292925;
 }
 
 h1,
@@ -122,7 +108,7 @@ h3,
 h4,
 h5,
 h6 {
-    color: var(--text) !important;
+    color: #292925 !important;
 }
 
 
@@ -131,31 +117,32 @@ h6 {
 ========================================================== */
 
 section[data-testid="stSidebar"] {
-    background: var(--sidebar) !important;
-    border-right: 1px solid var(--border) !important;
+    background-color: #eeeeea !important;
+    border-right: 1px solid #ddddD6 !important;
 }
 
 section[data-testid="stSidebar"] > div {
-    background: var(--sidebar) !important;
+    background-color: #eeeeea !important;
 }
 
-section[data-testid="stSidebar"] * {
-    color: var(--text) !important;
+section[data-testid="stSidebar"] p,
+section[data-testid="stSidebar"] span,
+section[data-testid="stSidebar"] label {
+    color: #292925 !important;
 }
 
 
 /* Sidebar buttons */
 
 section[data-testid="stSidebar"] button {
-    background: transparent !important;
+    background-color: transparent !important;
+    color: #292925 !important;
     border: none !important;
-    color: var(--text) !important;
-    border-radius: 10px !important;
-    text-align: left !important;
+    border-radius: 9px !important;
 }
 
 section[data-testid="stSidebar"] button:hover {
-    background: #e2e2dd !important;
+    background-color: #e0e0da !important;
 }
 
 
@@ -165,10 +152,13 @@ section[data-testid="stSidebar"] button:hover {
 
 .app-header {
     display: flex;
-    align-items: center;
     justify-content: space-between;
+    align-items: center;
+
     padding: 5px 0 18px 0;
-    border-bottom: 1px solid var(--border);
+
+    border-bottom: 1px solid #deded7;
+
     margin-bottom: 25px;
 }
 
@@ -179,26 +169,31 @@ section[data-testid="stSidebar"] button:hover {
 }
 
 .app-logo {
-    width: 34px;
-    height: 34px;
+    width: 36px;
+    height: 36px;
+
     border-radius: 10px;
-    background: #292925;
-    color: white !important;
+
+    background-color: #292925;
+    color: #ffffff !important;
+
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 18px;
+
+    font-size: 19px;
+    font-weight: 600;
 }
 
 .app-title {
     font-size: 18px;
     font-weight: 600;
-    color: var(--text) !important;
+    color: #292925 !important;
 }
 
 .app-status {
     font-size: 12px;
-    color: var(--muted) !important;
+    color: #777770 !important;
 }
 
 
@@ -206,36 +201,47 @@ section[data-testid="stSidebar"] button:hover {
    LOGIN PAGE
 ========================================================== */
 
-.login-container {
-    max-width: 500px;
-    margin: 40px auto 0 auto;
+.login-wrapper {
+    max-width: 520px;
+
+    margin: 65px auto 30px auto;
+
+    text-align: center;
 }
 
 .login-logo {
-    width: 62px;
-    height: 62px;
-    margin: 0 auto 18px auto;
+    width: 70px;
+    height: 70px;
+
+    margin: 0 auto 20px auto;
+
     border-radius: 18px;
-    background: #292925;
-    color: white !important;
+
+    background-color: #292925;
+    color: #ffffff !important;
+
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 30px;
+
+    font-size: 34px;
+    font-weight: 600;
 }
 
 .login-title {
-    text-align: center;
-    font-size: 32px;
-    font-weight: 650;
     color: #292925 !important;
-    margin-bottom: 8px;
+
+    font-size: 32px;
+    font-weight: 700;
+
+    margin-bottom: 10px;
 }
 
 .login-subtitle {
-    text-align: center;
-    font-size: 15px;
-    color: #777770 !important;
+    color: #66665f !important;
+
+    font-size: 16px;
+
     margin-bottom: 35px;
 }
 
@@ -245,7 +251,8 @@ section[data-testid="stSidebar"] button:hover {
 ========================================================== */
 
 button[data-baseweb="tab"] {
-    color: #777770 !important;
+    color: #66665f !important;
+    background-color: transparent !important;
 }
 
 button[data-baseweb="tab"][aria-selected="true"] {
@@ -257,23 +264,28 @@ button[data-baseweb="tab"][aria-selected="true"] {
    TEXT INPUTS
 ========================================================== */
 
-.stTextInput input,
-.stTextArea textarea {
-    background: #ffffff !important;
+.stTextInput label {
     color: #292925 !important;
-    border: 1px solid #d6d6cf !important;
+}
+
+.stTextInput input {
+    background-color: #ffffff !important;
+
+    color: #292925 !important;
+
+    border: 1px solid #cfcfc7 !important;
+
     border-radius: 10px !important;
 }
 
-.stTextInput input:focus,
-.stTextArea textarea:focus {
-    border-color: #999990 !important;
-    box-shadow: none !important;
+.stTextInput input::placeholder {
+    color: #999990 !important;
 }
 
-.stTextInput input::placeholder,
-.stTextArea textarea::placeholder {
-    color: #9a9a92 !important;
+.stTextInput input:focus {
+    border-color: #8f8f87 !important;
+
+    box-shadow: none !important;
 }
 
 
@@ -282,17 +294,23 @@ button[data-baseweb="tab"][aria-selected="true"] {
 ========================================================== */
 
 .stButton button {
-    background: #292925 !important;
+    background-color: #292925 !important;
+
     color: #ffffff !important;
+
     border: none !important;
+
     border-radius: 10px !important;
-    min-height: 40px !important;
+
+    min-height: 42px !important;
+
     font-weight: 500 !important;
 }
 
 .stButton button:hover {
-    background: #44443d !important;
-    color: white !important;
+    background-color: #44443d !important;
+
+    color: #ffffff !important;
 }
 
 
@@ -301,14 +319,17 @@ button[data-baseweb="tab"][aria-selected="true"] {
 ========================================================== */
 
 [data-testid="stFileUploader"] {
-    background: #ffffff !important;
-    border: 1px solid var(--border) !important;
+    background-color: #ffffff !important;
+
+    border: 1px solid #deded7 !important;
+
     border-radius: 12px !important;
+
     padding: 10px !important;
 }
 
 [data-testid="stFileUploader"] * {
-    color: var(--text) !important;
+    color: #292925 !important;
 }
 
 
@@ -317,22 +338,24 @@ button[data-baseweb="tab"][aria-selected="true"] {
 ========================================================== */
 
 [data-testid="stExpander"] {
-    background: #ffffff !important;
-    border: 1px solid var(--border) !important;
+    background-color: #ffffff !important;
+
+    border: 1px solid #deded7 !important;
+
     border-radius: 12px !important;
 }
 
 [data-testid="stExpander"] * {
-    color: var(--text) !important;
+    color: #292925 !important;
 }
 
 
 /* ==========================================================
-   RADIO
+   RADIO BUTTON
 ========================================================== */
 
 div[data-testid="stRadio"] label {
-    color: var(--text) !important;
+    color: #292925 !important;
 }
 
 
@@ -341,12 +364,13 @@ div[data-testid="stRadio"] label {
 ========================================================== */
 
 div[data-baseweb="select"] {
-    background: #ffffff !important;
+    background-color: #ffffff !important;
+
     border-radius: 9px !important;
 }
 
 div[data-baseweb="select"] * {
-    color: var(--text) !important;
+    color: #292925 !important;
 }
 
 
@@ -356,72 +380,103 @@ div[data-baseweb="select"] * {
 
 .welcome {
     text-align: center;
-    padding: 70px 20px 50px 20px;
+
+    padding: 70px 20px 45px 20px;
 }
 
 .welcome-logo {
-    width: 58px;
-    height: 58px;
+    width: 60px;
+    height: 60px;
+
+    margin: 0 auto 20px auto;
+
     border-radius: 16px;
-    background: #292925;
-    color: white !important;
+
+    background-color: #292925;
+    color: #ffffff !important;
+
     display: flex;
     align-items: center;
     justify-content: center;
-    margin: 0 auto 22px auto;
+
     font-size: 28px;
 }
 
 .welcome-title {
-    font-size: 30px;
-    font-weight: 600;
     color: #292925 !important;
+
+    font-size: 30px;
+
+    font-weight: 650;
+
     margin-bottom: 10px;
 }
 
 .welcome-text {
     color: #777770 !important;
-    font-size: 15px;
+
+    font-size: 16px;
 }
 
 
 /* ==========================================================
-   CHAT MESSAGES
+   USER MESSAGE
 ========================================================== */
 
 .user-message-row {
     display: flex;
+
     justify-content: flex-end;
+
     margin: 22px 0;
 }
 
 .user-message {
     max-width: 72%;
-    background: #e7e7e1;
+
+    background-color: #e7e7e1;
+
     color: #292925 !important;
+
     padding: 12px 17px;
+
     border-radius: 18px 18px 5px 18px;
+
     line-height: 1.6;
+
     font-size: 15px;
 }
 
+
+/* ==========================================================
+   AI MESSAGE
+========================================================== */
+
 .ai-message-row {
     display: flex;
+
     justify-content: flex-start;
+
     margin: 26px 0;
 }
 
 .ai-message {
     max-width: 82%;
+
     color: #30302c !important;
+
     line-height: 1.7;
+
     font-size: 15px;
 }
 
 .ai-label {
     color: #777770 !important;
+
     font-size: 12px;
+
     font-weight: 600;
+
     margin-bottom: 7px;
 }
 
@@ -432,11 +487,17 @@ div[data-baseweb="select"] * {
 
 .source-badge {
     display: inline-block;
-    background: #e9e9e3;
+
+    background-color: #e9e9e3;
+
     color: #686861 !important;
+
     border-radius: 20px;
+
     padding: 5px 11px;
+
     font-size: 11px;
+
     margin-bottom: 15px;
 }
 
@@ -446,12 +507,18 @@ div[data-baseweb="select"] * {
 ========================================================== */
 
 .usage-card {
-    background: #e4e4df;
+    background-color: #e4e4df;
+
     border-radius: 11px;
+
     padding: 12px;
+
     margin-top: 8px;
+
     font-size: 12px;
+
     line-height: 1.8;
+
     color: #66665f !important;
 }
 
@@ -461,18 +528,25 @@ div[data-baseweb="select"] * {
 ========================================================== */
 
 .settings-card {
-    background: #ffffff;
-    border: 1px solid var(--border);
+    background-color: #ffffff;
+
+    border: 1px solid #deded7;
+
     border-radius: 14px;
+
     padding: 18px;
+
     margin-bottom: 20px;
 }
 
 .settings-title {
+    color: #292925 !important;
+
     font-size: 16px;
+
     font-weight: 600;
+
     margin-bottom: 15px;
-    color: var(--text) !important;
 }
 
 
@@ -481,19 +555,24 @@ div[data-baseweb="select"] * {
 ========================================================== */
 
 [data-testid="stChatInput"] {
-    background: transparent !important;
+    background-color: transparent !important;
 }
 
 [data-testid="stChatInput"] > div {
-    background: #ffffff !important;
-    border: 1px solid #d3d3cc !important;
+    background-color: #ffffff !important;
+
+    border: 1px solid #cfcfc7 !important;
+
     border-radius: 17px !important;
-    box-shadow: 0 5px 25px rgba(0,0,0,0.07) !important;
+
+    box-shadow: 0 5px 25px rgba(0, 0, 0, 0.07) !important;
 }
 
 [data-testid="stChatInput"] textarea {
-    background: #ffffff !important;
+    background-color: #ffffff !important;
+
     color: #292925 !important;
+
     border: none !important;
 }
 
@@ -503,29 +582,38 @@ div[data-baseweb="select"] * {
 
 
 /* ==========================================================
-   TOKEN INFORMATION NEAR INPUT
+   TOKEN INFORMATION
 ========================================================== */
 
 .composer-info {
     position: fixed;
-    bottom: 86px;
+
+    bottom: 87px;
+
     left: 50%;
+
     transform: translateX(-50%);
+
     width: min(850px, 82%);
+
     text-align: right;
+
     font-size: 11px;
+
     color: #888880 !important;
+
     z-index: 998;
+
     pointer-events: none;
 }
 
 
 /* ==========================================================
-   DIVIDERS
+   DIVIDER
 ========================================================== */
 
 hr {
-    border-color: var(--border) !important;
+    border-color: #deded7 !important;
 }
 
 
@@ -569,15 +657,28 @@ def load_json(filename, default):
         return default
 
     try:
-        with open(filename, "r", encoding="utf-8") as file:
+
+        with open(
+            filename,
+            "r",
+            encoding="utf-8"
+        ) as file:
+
             return json.load(file)
+
     except Exception:
+
         return default
 
 
 def save_json(filename, data):
 
-    with open(filename, "w", encoding="utf-8") as file:
+    with open(
+        filename,
+        "w",
+        encoding="utf-8"
+    ) as file:
+
         json.dump(
             data,
             file,
@@ -630,7 +731,7 @@ session_defaults = {
 
     "show_settings": False,
 
-    "response_length": MAX_RESPONSE_TOKENS,
+    "response_length": DEFAULT_MAX_TOKENS,
 
     "theme": "Light",
 
@@ -646,22 +747,23 @@ for key, value in session_defaults.items():
 
 
 # ============================================================
-# TOKEN COUNTER
+# TOKEN COUNT
 # ============================================================
 
 def count_tokens(tokenizer, text):
 
     if not text:
+
         return 0
 
     try:
 
-        return len(
-            tokenizer.encode(
-                text,
-                add_special_tokens=True
-            )
+        tokens = tokenizer.encode(
+            text,
+            add_special_tokens=True
         )
+
+        return len(tokens)
 
     except Exception:
 
@@ -669,7 +771,7 @@ def count_tokens(tokenizer, text):
 
 
 # ============================================================
-# LOAD EMBEDDINGS
+# EMBEDDINGS
 # ============================================================
 
 @st.cache_resource
@@ -681,7 +783,7 @@ def load_embeddings():
 
 
 # ============================================================
-# LOAD LANGUAGE MODEL
+# LANGUAGE MODEL
 # ============================================================
 
 @st.cache_resource
@@ -703,7 +805,7 @@ def load_llm():
         "text-generation",
         model=model,
         tokenizer=tokenizer,
-        max_new_tokens=MAX_RESPONSE_TOKENS,
+        max_new_tokens=DEFAULT_MAX_TOKENS,
         do_sample=False,
         return_full_text=False
     )
@@ -712,7 +814,7 @@ def load_llm():
 
 
 # ============================================================
-# TIME GREETING
+# GREETING
 # ============================================================
 
 def get_greeting():
@@ -723,7 +825,7 @@ def get_greeting():
 
         return "Good Morning"
 
-    elif hour < 17:
+    if hour < 17:
 
         return "Good Afternoon"
 
@@ -731,7 +833,7 @@ def get_greeting():
 
 
 # ============================================================
-# CREATE NEW CHAT
+# NEW CHAT
 # ============================================================
 
 def create_new_chat():
@@ -785,15 +887,17 @@ def build_retriever(text):
         embeddings
     )
 
-    return vectorstore.as_retriever(
+    retriever = vectorstore.as_retriever(
         search_kwargs={
             "k": 2
         }
     )
 
+    return retriever
+
 
 # ============================================================
-# SAVE CHAT
+# SAVE CURRENT CHAT
 # ============================================================
 
 def save_current_chat():
@@ -801,8 +905,6 @@ def save_current_chat():
     if not st.session_state.messages:
 
         return
-
-    username = st.session_state.username
 
     if not st.session_state.current_chat_id:
 
@@ -833,21 +935,29 @@ def save_current_chat():
 
     chats[chat_id] = {
 
-        "username": username,
+        "username":
+            st.session_state.username,
 
-        "title": title,
+        "title":
+            title,
 
-        "messages": st.session_state.messages,
+        "messages":
+            st.session_state.messages,
 
-        "document_text": st.session_state.document_text,
+        "document_text":
+            st.session_state.document_text,
 
-        "document_name": st.session_state.document_name,
+        "document_name":
+            st.session_state.document_name,
 
-        "source_type": st.session_state.source_type,
+        "source_type":
+            st.session_state.source_type,
 
-        "total_tokens": total_tokens,
+        "total_tokens":
+            total_tokens,
 
-        "updated_at": datetime.now().isoformat()
+        "updated_at":
+            datetime.now().isoformat()
     }
 
     save_json(
@@ -906,7 +1016,7 @@ def load_chat(chat_id):
 
 
 # ============================================================
-# DELETE CHAT
+# DELETE CURRENT CHAT
 # ============================================================
 
 def delete_current_chat():
@@ -926,7 +1036,7 @@ def delete_current_chat():
 
 
 # ============================================================
-# LOGIN
+# LOGIN FUNCTION
 # ============================================================
 
 def login_user(username, password):
@@ -970,7 +1080,7 @@ def login_user(username, password):
 
 
 # ============================================================
-# SIGN UP
+# SIGNUP FUNCTION
 # ============================================================
 
 def signup_user(username, password):
@@ -997,7 +1107,8 @@ def signup_user(username, password):
 
         "password": password,
 
-        "created_at": datetime.now().isoformat()
+        "created_at":
+            datetime.now().isoformat()
     }
 
     save_json(
@@ -1027,20 +1138,25 @@ def signup_user(username, password):
 
 
 # ============================================================
-# PROCESS PDF
+# PDF PROCESSING
 # ============================================================
 
 def process_pdf(uploaded_file):
 
-    path = "temporary_document.pdf"
+    temporary_path = "temporary_document.pdf"
 
-    with open(path, "wb") as file:
+    with open(
+        temporary_path,
+        "wb"
+    ) as file:
 
         file.write(
             uploaded_file.getbuffer()
         )
 
-    loader = PyPDFLoader(path)
+    loader = PyPDFLoader(
+        temporary_path
+    )
 
     pages = loader.load()
 
@@ -1053,7 +1169,7 @@ def process_pdf(uploaded_file):
 
 
 # ============================================================
-# PROCESS TXT
+# TXT PROCESSING
 # ============================================================
 
 def process_txt(uploaded_file):
@@ -1065,7 +1181,7 @@ def process_txt(uploaded_file):
 
 
 # ============================================================
-# PROCESS DOCX
+# DOCX PROCESSING
 # ============================================================
 
 def process_docx(uploaded_file):
@@ -1078,10 +1194,12 @@ def process_docx(uploaded_file):
 
     for paragraph in document.paragraphs:
 
-        if paragraph.text.strip():
+        text = paragraph.text.strip()
+
+        if text:
 
             paragraphs.append(
-                paragraph.text.strip()
+                text
             )
 
     return "\n".join(
@@ -1090,7 +1208,7 @@ def process_docx(uploaded_file):
 
 
 # ============================================================
-# PROCESS XLSX
+# XLSX PROCESSING
 # ============================================================
 
 def process_xlsx(uploaded_file):
@@ -1124,7 +1242,7 @@ def process_xlsx(uploaded_file):
 
 
 # ============================================================
-# PROCESS WEBSITE
+# WEBSITE PROCESSING
 # ============================================================
 
 def process_website(url):
@@ -1174,9 +1292,13 @@ def process_website(url):
 
         if line:
 
-            lines.append(line)
+            lines.append(
+                line
+            )
 
-    return "\n".join(lines)
+    return "\n".join(
+        lines
+    )
 
 
 # ============================================================
@@ -1187,21 +1309,21 @@ if not st.session_state.logged_in:
 
     st.markdown(
         """
-        <div class="login-container">
+<div class="login-wrapper">
 
-            <div class="login-logo">
-                ✦
-            </div>
+    <div class="login-logo">
+        ✦
+    </div>
 
-            <div class="login-title">
-                AI Document Intelligence
-            </div>
+    <div class="login-title">
+        AI Document Intelligence
+    </div>
 
-            <div class="login-subtitle">
-                Ask questions about your documents and websites.
-            </div>
+    <div class="login-subtitle">
+        Ask questions about your documents and websites.
+    </div>
 
-        </div>
+</div>
         """,
         unsafe_allow_html=True
     )
@@ -1212,6 +1334,10 @@ if not st.session_state.logged_in:
             "Create Account"
         ]
     )
+
+    # --------------------------------------------------------
+    # LOGIN
+    # --------------------------------------------------------
 
     with login_tab:
 
@@ -1239,6 +1365,10 @@ if not st.session_state.logged_in:
                 username,
                 password
             )
+
+    # --------------------------------------------------------
+    # SIGNUP
+    # --------------------------------------------------------
 
     with signup_tab:
 
@@ -1278,35 +1408,36 @@ with st.sidebar:
 
     st.markdown(
         """
-        <div style="
-            display:flex;
-            align-items:center;
-            gap:10px;
-            margin-bottom:18px;
-        ">
+<div style="
+display:flex;
+align-items:center;
+gap:10px;
+margin-bottom:18px;
+">
 
-            <div style="
-                width:34px;
-                height:34px;
-                border-radius:10px;
-                background:#292925;
-                color:white !important;
-                display:flex;
-                align-items:center;
-                justify-content:center;
-                font-size:18px;
-            ">
-                ✦
-            </div>
+    <div style="
+    width:34px;
+    height:34px;
+    border-radius:10px;
+    background:#292925;
+    color:#ffffff !important;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:18px;
+    ">
+        ✦
+    </div>
 
-            <div style="
-                font-size:17px;
-                font-weight:600;
-            ">
-                AI Document Intelligence
-            </div>
+    <div style="
+    font-size:17px;
+    font-weight:600;
+    color:#292925 !important;
+    ">
+        AI Document Intelligence
+    </div>
 
-        </div>
+</div>
         """,
         unsafe_allow_html=True
     )
@@ -1370,7 +1501,7 @@ with st.sidebar:
 
             if st.button(
                 "▸ " + title,
-                key=f"history_{chat_id}",
+                key=f"chat_{chat_id}",
                 use_container_width=True
             ):
 
@@ -1379,6 +1510,10 @@ with st.sidebar:
                 )
 
     st.divider()
+
+    # --------------------------------------------------------
+    # USAGE
+    # --------------------------------------------------------
 
     user_usage = usage.get(
         st.session_state.username,
@@ -1396,29 +1531,36 @@ with st.sidebar:
 
     st.markdown(
         f"""
-        <div class="usage-card">
+<div class="usage-card">
 
-            Requests:
-            <b>{user_usage.get("requests", 0)}</b>
-            <br>
+    Requests:
+    <b>{user_usage.get("requests", 0)}</b>
 
-            Input tokens:
-            <b>{user_usage.get("input_tokens", 0)}</b>
-            <br>
+    <br>
 
-            Output tokens:
-            <b>{user_usage.get("output_tokens", 0)}</b>
-            <br>
+    Input tokens:
+    <b>{user_usage.get("input_tokens", 0)}</b>
 
-            Total tokens:
-            <b>{user_usage.get("total_tokens", 0)}</b>
+    <br>
 
-        </div>
+    Output tokens:
+    <b>{user_usage.get("output_tokens", 0)}</b>
+
+    <br>
+
+    Total tokens:
+    <b>{user_usage.get("total_tokens", 0)}</b>
+
+</div>
         """,
         unsafe_allow_html=True
     )
 
     st.write("")
+
+    # --------------------------------------------------------
+    # SETTINGS
+    # --------------------------------------------------------
 
     if st.button(
         "⚙  Settings",
@@ -1430,6 +1572,10 @@ with st.sidebar:
         )
 
         st.rerun()
+
+    # --------------------------------------------------------
+    # LOGOUT
+    # --------------------------------------------------------
 
     if st.button(
         "Logout",
@@ -1445,33 +1591,39 @@ with st.sidebar:
 # MAIN HEADER
 # ============================================================
 
+username_display = html.escape(
+    st.session_state.username
+)
+
 st.markdown(
     f"""
-    <div class="app-header">
+<div class="app-header">
 
-        <div class="app-header-left">
+    <div class="app-header-left">
 
-            <div class="app-logo">
-                ✦
-            </div>
-
-            <div>
-                <div class="app-title">
-                    AI Document Intelligence
-                </div>
-
-                <div class="app-status">
-                    ● Ready
-                </div>
-            </div>
-
+        <div class="app-logo">
+            ✦
         </div>
 
-        <div class="app-status">
-            {html.escape(st.session_state.username)}
+        <div>
+
+            <div class="app-title">
+                AI Document Intelligence
+            </div>
+
+            <div class="app-status">
+                ● Ready
+            </div>
+
         </div>
 
     </div>
+
+    <div class="app-status">
+        {username_display}
+    </div>
+
+</div>
     """,
     unsafe_allow_html=True
 )
@@ -1485,13 +1637,13 @@ if st.session_state.show_settings:
 
     st.markdown(
         """
-        <div class="settings-card">
+<div class="settings-card">
 
-            <div class="settings-title">
-                ⚙ Chat Settings
-            </div>
+    <div class="settings-title">
+        ⚙ Chat Settings
+    </div>
 
-        </div>
+</div>
         """,
         unsafe_allow_html=True
     )
@@ -1500,34 +1652,27 @@ if st.session_state.show_settings:
 
     with col1:
 
-        st.session_state.theme = st.selectbox(
+        st.selectbox(
             "Theme",
-            [
-                "Light"
-            ],
-            index=0
+            ["Light"],
+            key="theme_select"
         )
 
     with col2:
 
         st.session_state.response_length = st.selectbox(
             "Maximum response tokens",
-            [
-                50,
-                100,
-                150,
-                200
-            ],
+            [50, 100, 150, 200],
             index=1
         )
 
     st.caption(
-        "The response token limit controls the maximum length of the AI response."
+        "100 tokens is recommended for faster responses."
     )
 
 
 # ============================================================
-# DOCUMENT / WEBSITE AREA
+# DOCUMENT / WEBSITE INPUT
 # ============================================================
 
 with st.expander(
@@ -1559,8 +1704,7 @@ with st.expander(
                 "txt",
                 "docx",
                 "xlsx"
-            ],
-            help="Supported: PDF, TXT, DOCX and XLSX"
+            ]
         )
 
         if uploaded_file is not None:
@@ -1617,7 +1761,7 @@ with st.expander(
                         if not text.strip():
 
                             st.error(
-                                "The document does not contain readable text."
+                                "The document contains no readable text."
                             )
 
                         else:
@@ -1633,7 +1777,9 @@ with st.expander(
                             )
 
                             st.session_state.retriever = (
-                                build_retriever(text)
+                                build_retriever(
+                                    text
+                                )
                             )
 
                             st.success(
@@ -1683,7 +1829,7 @@ with st.expander(
                         if not text.strip():
 
                             st.error(
-                                "No readable text was found on this website."
+                                "No readable text was found."
                             )
 
                         else:
@@ -1699,7 +1845,9 @@ with st.expander(
                             )
 
                             st.session_state.retriever = (
-                                build_retriever(text)
+                                build_retriever(
+                                    text
+                                )
                             )
 
                             st.success(
@@ -1725,9 +1873,9 @@ if st.session_state.document_text:
 
     st.markdown(
         f"""
-        <div class="source-badge">
-            📄 {source_name}
-        </div>
+<span class="source-badge">
+    📄 {source_name}
+</span>
         """,
         unsafe_allow_html=True
     )
@@ -1747,28 +1895,28 @@ if not st.session_state.messages:
 
     st.markdown(
         f"""
-        <div class="welcome">
+<div class="welcome">
 
-            <div class="welcome-logo">
-                ✦
-            </div>
+    <div class="welcome-logo">
+        ✦
+    </div>
 
-            <div class="welcome-title">
-                {greeting}, {username}
-            </div>
+    <div class="welcome-title">
+        {greeting}, {username}
+    </div>
 
-            <div class="welcome-text">
-                What would you like to know?
-            </div>
+    <div class="welcome-text">
+        What would you like to know?
+    </div>
 
-        </div>
+</div>
         """,
         unsafe_allow_html=True
     )
 
 
 # ============================================================
-# DISPLAY CHAT HISTORY
+# DISPLAY CHAT MESSAGES
 # ============================================================
 
 for message in st.session_state.messages:
@@ -1783,24 +1931,25 @@ for message in st.session_state.messages:
         ""
     )
 
-    safe_content = html.escape(
-        content
-    ).replace(
-        "\n",
-        "<br>"
+    safe_content = (
+        html.escape(content)
+        .replace(
+            "\n",
+            "<br>"
+        )
     )
 
     if role == "user":
 
         st.markdown(
             f"""
-            <div class="user-message-row">
+<div class="user-message-row">
 
-                <div class="user-message">
-                    {safe_content}
-                </div>
+    <div class="user-message">
+        {safe_content}
+    </div>
 
-            </div>
+</div>
             """,
             unsafe_allow_html=True
         )
@@ -1809,35 +1958,35 @@ for message in st.session_state.messages:
 
         st.markdown(
             f"""
-            <div class="ai-message-row">
+<div class="ai-message-row">
 
-                <div class="ai-message">
+    <div class="ai-message">
 
-                    <div class="ai-label">
-                        ✦ AI
-                    </div>
+        <div class="ai-label">
+            ✦ AI
+        </div>
 
-                    <div>
-                        {safe_content}
-                    </div>
+        <div>
+            {safe_content}
+        </div>
 
-                </div>
+    </div>
 
-            </div>
+</div>
             """,
             unsafe_allow_html=True
         )
 
 
 # ============================================================
-# TOKEN LIMIT NEAR TYPING AREA
+# TOKEN INFORMATION NEAR INPUT
 # ============================================================
 
 st.markdown(
     f"""
-    <div class="composer-info">
-        Maximum response: {st.session_state.response_length} tokens
-    </div>
+<div class="composer-info">
+    Maximum response: {st.session_state.response_length} tokens
+</div>
     """,
     unsafe_allow_html=True
 )
@@ -1853,7 +2002,7 @@ prompt = st.chat_input(
 
 
 # ============================================================
-# PROCESS QUESTION
+# PROCESS USER QUESTION
 # ============================================================
 
 if prompt:
@@ -1864,13 +2013,13 @@ if prompt:
 
         st.stop()
 
-    # --------------------------------------------------------
-    # LOAD MODEL
-    # --------------------------------------------------------
-
     with st.spinner(
         "Thinking..."
     ):
+
+        # ----------------------------------------------------
+        # LOAD MODEL
+        # ----------------------------------------------------
 
         try:
 
@@ -1879,13 +2028,13 @@ if prompt:
         except Exception as error:
 
             st.error(
-                f"Could not load the AI model: {error}"
+                f"Could not load AI model: {error}"
             )
 
             st.stop()
 
         # ----------------------------------------------------
-        # COUNT INPUT TOKENS
+        # INPUT TOKENS
         # ----------------------------------------------------
 
         input_tokens = count_tokens(
@@ -1894,7 +2043,7 @@ if prompt:
         )
 
         # ----------------------------------------------------
-        # RETRIEVE DOCUMENT CONTEXT
+        # DOCUMENT CONTEXT
         # ----------------------------------------------------
 
         context = ""
@@ -1904,8 +2053,7 @@ if prompt:
             try:
 
                 documents = (
-                    st.session_state
-                    .retriever
+                    st.session_state.retriever
                     .invoke(prompt)
                 )
 
@@ -1927,8 +2075,8 @@ if prompt:
             final_prompt = f"""
 You are an AI document assistant.
 
-Use ONLY the information provided in the context
-to answer the user's question.
+Answer the user's question using ONLY the
+information in the context.
 
 Do not invent information.
 
@@ -1940,7 +2088,7 @@ say:
 Context:
 {context}
 
-User question:
+Question:
 {prompt}
 
 Answer:
@@ -1953,14 +2101,14 @@ You are a helpful AI assistant.
 
 Answer the user's question clearly and briefly.
 
-User question:
+Question:
 {prompt}
 
 Answer:
 """
 
         # ----------------------------------------------------
-        # GENERATE ANSWER
+        # GENERATE
         # ----------------------------------------------------
 
         try:
@@ -1994,7 +2142,7 @@ Answer:
             )
 
         # ----------------------------------------------------
-        # COUNT OUTPUT TOKENS
+        # OUTPUT TOKENS
         # ----------------------------------------------------
 
         output_tokens = count_tokens(
@@ -2076,7 +2224,7 @@ Answer:
     save_current_chat()
 
     # ========================================================
-    # RERUN TO DISPLAY MESSAGE
+    # REFRESH
     # ========================================================
 
     st.rerun()
