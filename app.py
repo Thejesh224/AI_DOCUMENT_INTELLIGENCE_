@@ -13,6 +13,7 @@ import streamlit as st
 import pandas as pd
 
 from dotenv import load_dotenv
+from langchain_core.documents import Document
 
 # ============================================================
 # STREAMLIT CONFIG
