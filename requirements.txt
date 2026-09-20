@@ -14,3 +14,4 @@ openpyxl
 pandas
 requests
 beautifulsoup4
+google-genai
