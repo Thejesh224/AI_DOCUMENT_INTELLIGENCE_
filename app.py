@@ -1,8 +1,3 @@
-# ============================================================
-# AI DOCUMENT INTELLIGENCE
-# Full Streamlit Application
-# ============================================================
-
 import os
 import re
 import json
@@ -29,7 +24,7 @@ from google.genai import types
 
 
 # ============================================================
-# 1. PAGE CONFIG
+# CONFIGURATION
 # ============================================================
 
 st.set_page_config(
@@ -39,33 +34,22 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-
-# ============================================================
-# 2. APPLICATION SETTINGS
-# ============================================================
-
 APP_NAME = "AI Document Intelligence"
 
-# Fast Gemini model
 GEMINI_MODEL = "gemini-2.5-flash-lite"
 
-# Practical output limit.
-# 50,000 is not useful for normal chat and can make responses
-# slower/expensive. Increase only if really required.
 MAX_OUTPUT_TOKENS = 4096
 
-# RAG settings
 CHUNK_SIZE = 1200
 CHUNK_OVERLAP = 150
 RETRIEVER_K = 4
 
-# Local persistence files
 USERS_FILE = "users.json"
 CHATS_FILE = "chats.json"
 
 
 # ============================================================
-# 3. SESSION STATE
+# SESSION STATE
 # ============================================================
 
 def initialize_session_state():
@@ -92,7 +76,7 @@ initialize_session_state()
 
 
 # ============================================================
-# 4. BASIC FILE HELPERS
+# JSON FILE FUNCTIONS
 # ============================================================
 
 def ensure_json_file(path, default_value):
@@ -100,19 +84,38 @@ def ensure_json_file(path, default_value):
     if not os.path.exists(path):
 
         try:
-            with open(path, "w", encoding="utf-8") as file:
-                json.dump(default_value, file, indent=2)
+
+            with open(
+                path,
+                "w",
+                encoding="utf-8"
+            ) as file:
+
+                json.dump(
+                    default_value,
+                    file,
+                    indent=2
+                )
+
         except Exception:
             pass
 
 
 def load_json(path, default_value):
 
-    ensure_json_file(path, default_value)
+    ensure_json_file(
+        path,
+        default_value
+    )
 
     try:
 
-        with open(path, "r", encoding="utf-8") as file:
+        with open(
+            path,
+            "r",
+            encoding="utf-8"
+        ) as file:
+
             return json.load(file)
 
     except Exception:
@@ -126,10 +129,23 @@ def save_json(path, data):
 
         temp_path = path + ".tmp"
 
-        with open(temp_path, "w", encoding="utf-8") as file:
-            json.dump(data, file, indent=2, ensure_ascii=False)
+        with open(
+            temp_path,
+            "w",
+            encoding="utf-8"
+        ) as file:
 
-        os.replace(temp_path, path)
+            json.dump(
+                data,
+                file,
+                indent=2,
+                ensure_ascii=False
+            )
+
+        os.replace(
+            temp_path,
+            path
+        )
 
         return True
 
@@ -138,12 +154,19 @@ def save_json(path, data):
         return False
 
 
-ensure_json_file(USERS_FILE, {})
-ensure_json_file(CHATS_FILE, {})
+ensure_json_file(
+    USERS_FILE,
+    {}
+)
+
+ensure_json_file(
+    CHATS_FILE,
+    {}
+)
 
 
 # ============================================================
-# 5. PASSWORD HELPERS
+# PASSWORD
 # ============================================================
 
 def hash_password(password):
@@ -154,7 +177,7 @@ def hash_password(password):
 
 
 # ============================================================
-# 6. IST GREETING
+# IST GREETING
 # ============================================================
 
 def get_time_greeting():
@@ -166,67 +189,125 @@ def get_time_greeting():
     hour = ist_now.hour
 
     if 5 <= hour < 12:
+
         return "🌅 Good Morning"
 
     elif 12 <= hour < 17:
+
         return "☀️ Good Afternoon"
 
     elif 17 <= hour < 21:
+
         return "🌇 Good Evening"
 
     else:
+
         return "🌙 Good Night"
 
 
 # ============================================================
-# 7. USER AUTHENTICATION
+# USER REGISTRATION
 # ============================================================
 
-def register_user(username, password):
+def register_user(
+    username,
+    password
+):
 
     username = username.strip()
 
     if not username:
-        return False, "Please enter a username."
+
+        return (
+            False,
+            "Please enter a username."
+        )
 
     if not password:
-        return False, "Please enter a password."
 
-    users = load_json(USERS_FILE, {})
+        return (
+            False,
+            "Please enter a password."
+        )
+
+    users = load_json(
+        USERS_FILE,
+        {}
+    )
 
     if username in users:
-        return False, "Username already exists."
+
+        return (
+            False,
+            "Username already exists."
+        )
 
     users[username] = {
-        "password": hash_password(password),
-        "created_at": datetime.now().isoformat(),
+
+        "password": hash_password(
+            password
+        ),
+
+        "created_at":
+            datetime.now().isoformat(),
     }
 
-    if save_json(USERS_FILE, users):
-        return True, "Account created successfully."
+    if save_json(
+        USERS_FILE,
+        users
+    ):
 
-    return False, "Could not save account."
+        return (
+            True,
+            "Account created successfully."
+        )
 
-
-def authenticate_user(username, password):
-
-    users = load_json(USERS_FILE, {})
-
-    if username not in users:
-        return False
-
-    stored_password = users[username].get("password", "")
-
-    return stored_password == hash_password(password)
+    return (
+        False,
+        "Could not save account."
+    )
 
 
 # ============================================================
-# 8. LOGIN PAGE
+# USER LOGIN
+# ============================================================
+
+def authenticate_user(
+    username,
+    password
+):
+
+    users = load_json(
+        USERS_FILE,
+        {}
+    )
+
+    if username not in users:
+
+        return False
+
+    stored_password = users[
+        username
+    ].get(
+        "password",
+        ""
+    )
+
+    return (
+        stored_password
+        == hash_password(password)
+    )
+
+
+# ============================================================
+# LOGIN PAGE
 # ============================================================
 
 def show_login():
 
-    st.title("🤖 AI Document Intelligence")
+    st.title(
+        "🤖 AI Document Intelligence"
+    )
 
     st.caption(
         "Chat with your documents, images and websites using AI."
@@ -235,7 +316,10 @@ def show_login():
     st.divider()
 
     login_tab, signup_tab = st.tabs(
-        ["🔐 Login", "📝 Create Account"]
+        [
+            "🔐 Login",
+            "📝 Create Account"
+        ]
     )
 
     with login_tab:
@@ -257,13 +341,22 @@ def show_login():
             use_container_width=True
         ):
 
-            if authenticate_user(username, password):
+            if authenticate_user(
+                username,
+                password
+            ):
 
                 st.session_state.logged_in = True
-                st.session_state.username = username
+
+                st.session_state.username = (
+                    username
+                )
+
                 st.session_state.current_chat_id = None
 
-                st.success("Login successful.")
+                st.success(
+                    "Login successful."
+                )
 
                 st.rerun()
 
@@ -320,35 +413,48 @@ def show_login():
 
 
 # ============================================================
-# 9. CHAT STORAGE
+# CHAT FUNCTIONS
 # ============================================================
 
 def get_user_chats(username):
 
-    chats = load_json(CHATS_FILE, {})
+    chats = load_json(
+        CHATS_FILE,
+        {}
+    )
 
     user_chats = []
 
     for chat_id, chat_data in chats.items():
 
-        if chat_data.get("username") == username:
+        if chat_data.get(
+            "username"
+        ) == username:
 
             user_chats.append(
                 {
                     "id": chat_id,
-                    "title": chat_data.get(
-                        "title",
-                        "New Chat"
-                    ),
-                    "updated_at": chat_data.get(
-                        "updated_at",
-                        ""
-                    ),
+
+                    "title":
+                        chat_data.get(
+                            "title",
+                            "New Chat"
+                        ),
+
+                    "updated_at":
+                        chat_data.get(
+                            "updated_at",
+                            ""
+                        ),
                 }
             )
 
     user_chats.sort(
-        key=lambda x: x.get("updated_at", ""),
+        key=lambda x:
+            x.get(
+                "updated_at",
+                ""
+            ),
         reverse=True
     )
 
@@ -357,9 +463,14 @@ def get_user_chats(username):
 
 def create_chat(username):
 
-    chats = load_json(CHATS_FILE, {})
+    chats = load_json(
+        CHATS_FILE,
+        {}
+    )
 
-    chat_id = str(uuid.uuid4())
+    chat_id = str(
+        uuid.uuid4()
+    )
 
     now = datetime.now().isoformat()
 
@@ -374,39 +485,61 @@ def create_chat(username):
         "updated_at": now,
 
         "messages": [],
-
     }
 
-    save_json(CHATS_FILE, chats)
+    save_json(
+        CHATS_FILE,
+        chats
+    )
 
     return chat_id
 
 
 def get_chat(chat_id):
 
-    chats = load_json(CHATS_FILE, {})
+    chats = load_json(
+        CHATS_FILE,
+        {}
+    )
 
-    return chats.get(chat_id)
+    return chats.get(
+        chat_id
+    )
 
 
-def save_chat(chat_id, chat_data):
+def save_chat(
+    chat_id,
+    chat_data
+):
 
-    chats = load_json(CHATS_FILE, {})
+    chats = load_json(
+        CHATS_FILE,
+        {}
+    )
 
     chats[chat_id] = chat_data
 
-    save_json(CHATS_FILE, chats)
+    save_json(
+        CHATS_FILE,
+        chats
+    )
 
 
 def delete_chat(chat_id):
 
-    chats = load_json(CHATS_FILE, {})
+    chats = load_json(
+        CHATS_FILE,
+        {}
+    )
 
     if chat_id in chats:
 
         del chats[chat_id]
 
-    save_json(CHATS_FILE, chats)
+    save_json(
+        CHATS_FILE,
+        chats
+    )
 
 
 def make_chat_title(question):
@@ -414,6 +547,7 @@ def make_chat_title(question):
     question = question.strip()
 
     if not question:
+
         return "New Chat"
 
     clean_question = re.sub(
@@ -433,7 +567,7 @@ def make_chat_title(question):
 
 
 # ============================================================
-# 10. TEXT SPLITTER
+# TEXT SPLITTER
 # ============================================================
 
 def split_text(
@@ -449,6 +583,7 @@ def split_text(
     ).strip()
 
     if not text:
+
         return []
 
     chunks = []
@@ -464,12 +599,18 @@ def split_text(
             text_length
         )
 
-        chunk = text[start:end].strip()
+        chunk = text[
+            start:end
+        ].strip()
 
         if chunk:
-            chunks.append(chunk)
+
+            chunks.append(
+                chunk
+            )
 
         if end >= text_length:
+
             break
 
         start = max(
@@ -481,10 +622,13 @@ def split_text(
 
 
 # ============================================================
-# 11. DOCUMENT EXTRACTION
+# PDF EXTRACTION
 # ============================================================
 
-def extract_pdf(file_bytes, filename):
+def extract_pdf(
+    file_bytes,
+    filename
+):
 
     documents = []
 
@@ -499,7 +643,10 @@ def extract_pdf(file_bytes, filename):
             start=1
         ):
 
-            text = page.extract_text() or ""
+            text = (
+                page.extract_text()
+                or ""
+            )
 
             if text.strip():
 
@@ -507,9 +654,14 @@ def extract_pdf(file_bytes, filename):
                     Document(
                         page_content=text,
                         metadata={
-                            "source": filename,
-                            "page": page_number,
-                            "type": "PDF",
+                            "source":
+                                filename,
+
+                            "page":
+                                page_number,
+
+                            "type":
+                                "PDF",
                         },
                     )
                 )
@@ -523,7 +675,14 @@ def extract_pdf(file_bytes, filename):
     return documents
 
 
-def extract_docx(file_bytes, filename):
+# ============================================================
+# DOCX EXTRACTION
+# ============================================================
+
+def extract_docx(
+    file_bytes,
+    filename
+):
 
     documents = []
 
@@ -537,13 +696,19 @@ def extract_docx(file_bytes, filename):
 
         for paragraph in doc.paragraphs:
 
-            text = paragraph.text.strip()
+            text = (
+                paragraph.text.strip()
+            )
 
             if text:
 
-                paragraphs.append(text)
+                paragraphs.append(
+                    text
+                )
 
-        full_text = "\n".join(paragraphs)
+        full_text = "\n".join(
+            paragraphs
+        )
 
         if full_text.strip():
 
@@ -551,8 +716,11 @@ def extract_docx(file_bytes, filename):
                 Document(
                     page_content=full_text,
                     metadata={
-                        "source": filename,
-                        "type": "DOCX",
+                        "source":
+                            filename,
+
+                        "type":
+                            "DOCX",
                     },
                 )
             )
@@ -566,7 +734,14 @@ def extract_docx(file_bytes, filename):
     return documents
 
 
-def extract_txt(file_bytes, filename):
+# ============================================================
+# TXT EXTRACTION
+# ============================================================
+
+def extract_txt(
+    file_bytes,
+    filename
+):
 
     try:
 
@@ -582,20 +757,31 @@ def extract_txt(file_bytes, filename):
         )
 
     if not text.strip():
+
         return []
 
     return [
         Document(
             page_content=text,
             metadata={
-                "source": filename,
-                "type": "TXT",
+                "source":
+                    filename,
+
+                "type":
+                    "TXT",
             },
         )
     ]
 
 
-def extract_excel(file_bytes, filename):
+# ============================================================
+# EXCEL EXTRACTION
+# ============================================================
+
+def extract_excel(
+    file_bytes,
+    filename
+):
 
     documents = []
 
@@ -605,7 +791,9 @@ def extract_excel(file_bytes, filename):
             BytesIO(file_bytes)
         )
 
-        for sheet_name in excel_file.sheet_names:
+        for sheet_name in (
+            excel_file.sheet_names
+        ):
 
             df = pd.read_excel(
                 excel_file,
@@ -613,6 +801,7 @@ def extract_excel(file_bytes, filename):
             )
 
             if df.empty:
+
                 continue
 
             text = df.to_string(
@@ -623,9 +812,14 @@ def extract_excel(file_bytes, filename):
                 Document(
                     page_content=text,
                     metadata={
-                        "source": filename,
-                        "sheet": sheet_name,
-                        "type": "EXCEL",
+                        "source":
+                            filename,
+
+                        "sheet":
+                            sheet_name,
+
+                        "type":
+                            "EXCEL",
                     },
                 )
             )
@@ -633,13 +827,20 @@ def extract_excel(file_bytes, filename):
     except Exception as error:
 
         raise RuntimeError(
-            f"Could not read Excel file '{filename}': {error}"
+            f"Could not read Excel '{filename}': {error}"
         )
 
     return documents
 
 
-def extract_document(file_bytes, filename):
+# ============================================================
+# DOCUMENT ROUTER
+# ============================================================
+
+def extract_document(
+    file_bytes,
+    filename
+):
 
     extension = (
         filename
@@ -654,43 +855,48 @@ def extract_document(file_bytes, filename):
             filename
         )
 
-    elif extension == "docx":
+    if extension == "docx":
 
         return extract_docx(
             file_bytes,
             filename
         )
 
-    elif extension == "txt":
+    if extension == "txt":
 
         return extract_txt(
             file_bytes,
             filename
         )
 
-    elif extension in ["xlsx", "xls"]:
+    if extension in [
+        "xlsx",
+        "xls"
+    ]:
 
         return extract_excel(
             file_bytes,
             filename
         )
 
-    else:
-
-        return []
+    return []
 
 
 # ============================================================
-# 12. WEBSITE EXTRACTION
+# WEBSITE
 # ============================================================
 
 def extract_website(url):
 
     if not url.strip():
+
         return []
 
     if not url.startswith(
-        ("http://", "https://")
+        (
+            "http://",
+            "https://"
+        )
     ):
 
         url = "https://" + url
@@ -702,7 +908,7 @@ def extract_website(url):
             timeout=15,
             headers={
                 "User-Agent":
-                "Mozilla/5.0"
+                    "Mozilla/5.0"
             }
         )
 
@@ -753,7 +959,7 @@ def extract_website(url):
 
 
 # ============================================================
-# 13. CREATE RAG CHUNKS
+# CREATE RAG CHUNKS
 # ============================================================
 
 def create_chunks(documents):
@@ -774,7 +980,9 @@ def create_chunks(documents):
                 document.metadata
             )
 
-            metadata["chunk"] = index + 1
+            metadata["chunk"] = (
+                index + 1
+            )
 
             chunks.append(
                 Document(
@@ -787,43 +995,45 @@ def create_chunks(documents):
 
 
 # ============================================================
-# 14. EMBEDDINGS
+# EMBEDDINGS
 # ============================================================
 
 @st.cache_resource
 def get_embeddings():
 
     return HuggingFaceEmbeddings(
-        model_name="sentence-transformers/all-MiniLM-L6-v2"
+        model_name=
+            "sentence-transformers/all-MiniLM-L6-v2"
     )
 
 
 # ============================================================
-# 15. BUILD VECTOR STORE
+# VECTOR STORE
 # ============================================================
 
-def build_vectorstore(documents):
+def build_vectorstore(
+    documents
+):
 
-    chunks = create_chunks(documents)
+    chunks = create_chunks(
+        documents
+    )
 
     if not chunks:
+
         return None
 
     embeddings = get_embeddings()
 
-    vectorstore = FAISS.from_documents(
+    return FAISS.from_documents(
         chunks,
         embeddings
     )
 
-    return vectorstore
 
-
-# ============================================================
-# 16. DOCUMENT SIGNATURE
-# ============================================================
-
-def create_document_signature(documents):
+def create_document_signature(
+    documents
+):
 
     values = []
 
@@ -835,6 +1045,7 @@ def create_document_signature(documents):
                     "source",
                     ""
                 ),
+
                 len(
                     document.page_content
                 ),
@@ -844,23 +1055,24 @@ def create_document_signature(documents):
     return str(values)
 
 
-# ============================================================
-# 17. BUILD / UPDATE RAG
-# ============================================================
-
 def rebuild_rag_if_needed():
 
-    documents = st.session_state.documents
+    documents = (
+        st.session_state.documents
+    )
 
     if not documents:
 
         st.session_state.vectorstore = None
+
         st.session_state.vectorstore_signature = None
 
         return
 
-    signature = create_document_signature(
-        documents
+    signature = (
+        create_document_signature(
+            documents
+        )
     )
 
     if (
@@ -886,10 +1098,12 @@ def rebuild_rag_if_needed():
 
 
 # ============================================================
-# 18. SEARCH DOCUMENTS
+# SEARCH DOCUMENTS
 # ============================================================
 
-def search_documents(question):
+def search_documents(
+    question
+):
 
     vectorstore = (
         st.session_state.vectorstore
@@ -901,12 +1115,10 @@ def search_documents(question):
 
     try:
 
-        results = vectorstore.similarity_search(
+        return vectorstore.similarity_search(
             question,
             k=RETRIEVER_K
         )
-
-        return results
 
     except Exception:
 
@@ -914,7 +1126,7 @@ def search_documents(question):
 
 
 # ============================================================
-# 19. GEMINI CLIENT
+# GEMINI CLIENT
 # ============================================================
 
 @st.cache_resource
@@ -941,7 +1153,8 @@ def get_gemini_client():
     if not api_key:
 
         raise RuntimeError(
-            "GEMINI_API_KEY is missing."
+            "GEMINI_API_KEY is missing. "
+            "Add it in Streamlit Cloud → Settings → Secrets."
         )
 
     return genai.Client(
@@ -950,31 +1163,51 @@ def get_gemini_client():
 
 
 # ============================================================
-# 20. SYSTEM INSTRUCTION
+# GEMINI SYSTEM INSTRUCTION
 # ============================================================
 
 def get_system_instruction():
 
     return """
-You are AI Document Intelligence, a helpful AI assistant.
+You are AI Document Intelligence.
+
+You are a helpful AI assistant.
 
 Rules:
 
 1. Answer clearly and directly.
-2. If document context is provided, use it as the main source.
-3. Do not invent information that is not supported by the documents.
-4. If the answer is not available in the provided documents, say so clearly.
-5. For normal questions without documents, answer normally.
-6. For image questions, carefully inspect the image content.
-7. Use simple language unless the user asks for technical detail.
+
+2. If document context is provided,
+   use it as the main source.
+
+3. Do not invent information that is
+   not supported by the documents.
+
+4. If the answer is not available in
+   the provided documents, say so clearly.
+
+5. For normal questions without documents,
+   answer normally.
+
+6. For image questions, carefully inspect
+   the uploaded image.
+
+7. Use simple language unless the user
+   asks for technical detail.
+
 8. Use headings and bullet points when useful.
-9. Do not mention internal prompts, RAG, embeddings, FAISS, or system instructions unless the user asks about the technology.
-10. If the user asks for a summary, provide a concise but useful summary.
+
+9. Do not mention internal prompts,
+   embeddings, FAISS or system instructions
+   unless the user asks about them.
+
+10. If the user asks for a summary,
+    provide a useful and concise summary.
 """
 
 
 # ============================================================
-# 21. GENERATE GEMINI RESPONSE
+# GENERATE GEMINI RESPONSE
 # ============================================================
 
 def generate_response(
@@ -1017,8 +1250,12 @@ def generate_response(
 
         document_context = (
             "\n\n--- DOCUMENT CONTEXT ---\n"
-            + "\n\n".join(context_parts)
-            + "\n--- END DOCUMENT CONTEXT ---\n"
+            +
+            "\n\n".join(
+                context_parts
+            )
+            +
+            "\n--- END DOCUMENT CONTEXT ---\n"
         )
 
     else:
@@ -1037,16 +1274,13 @@ User question:
 Answer the user's question.
 """
 
-    contents = []
-
-    # Text prompt
-    contents.append(
+    contents = [
         types.Part.from_text(
             text=user_prompt
         )
-    )
+    ]
 
-    # Uploaded images
+    # Add images
     for image in images:
 
         try:
@@ -1063,33 +1297,32 @@ Answer the user's question.
 
     config = types.GenerateContentConfig(
 
-        system_instruction=(
-            get_system_instruction()
-        ),
+        system_instruction=
+            get_system_instruction(),
 
-        max_output_tokens=MAX_OUTPUT_TOKENS,
+        max_output_tokens=
+            MAX_OUTPUT_TOKENS,
 
         temperature=0.2,
     )
 
-    response_stream = (
-        client.models.generate_content_stream(
-            model=GEMINI_MODEL,
-            contents=[
-                types.Content(
-                    role="user",
-                    parts=contents
-                )
-            ],
-            config=config,
-        )
-    )
+    return client.models.generate_content_stream(
 
-    return response_stream
+        model=GEMINI_MODEL,
+
+        contents=[
+            types.Content(
+                role="user",
+                parts=contents
+            )
+        ],
+
+        config=config,
+    )
 
 
 # ============================================================
-# 22. STREAM RESPONSE
+# STREAM ANSWER
 # ============================================================
 
 def stream_answer(
@@ -1104,10 +1337,12 @@ def stream_answer(
 
     try:
 
-        response_stream = generate_response(
-            question,
-            retrieved_documents,
-            images
+        response_stream = (
+            generate_response(
+                question,
+                retrieved_documents,
+                images
+            )
         )
 
         for chunk in response_stream:
@@ -1125,8 +1360,7 @@ def stream_answer(
                 full_response += text
 
                 placeholder.markdown(
-                    full_response
-                    + "▌"
+                    full_response + "▌"
                 )
 
         placeholder.markdown(
@@ -1137,12 +1371,10 @@ def stream_answer(
 
     except Exception as error:
 
-        error_message = str(error)
-
         placeholder.empty()
 
         st.error(
-            "AI response failed."
+            "❌ AI response failed."
         )
 
         with st.expander(
@@ -1150,14 +1382,14 @@ def stream_answer(
         ):
 
             st.code(
-                error_message
+                str(error)
             )
 
         return ""
 
 
 # ============================================================
-# 23. SAVE USER MESSAGE + AI MESSAGE
+# ADD MESSAGE
 # ============================================================
 
 def add_message_to_chat(
@@ -1167,9 +1399,12 @@ def add_message_to_chat(
     sources=None
 ):
 
-    chat = get_chat(chat_id)
+    chat = get_chat(
+        chat_id
+    )
 
     if not chat:
+
         return
 
     message = {
@@ -1178,8 +1413,8 @@ def add_message_to_chat(
 
         "content": content,
 
-        "timestamp": datetime.now().isoformat(),
-
+        "timestamp":
+            datetime.now().isoformat(),
     }
 
     if sources:
@@ -1201,7 +1436,7 @@ def add_message_to_chat(
 
 
 # ============================================================
-# 24. CREATE NEW CHAT
+# NEW CHAT
 # ============================================================
 
 def start_new_chat():
@@ -1216,14 +1451,16 @@ def start_new_chat():
 
 
 # ============================================================
-# 25. SIDEBAR
+# SIDEBAR
 # ============================================================
 
 def show_sidebar():
 
     with st.sidebar:
 
-        st.title("🤖 AI Document Intelligence")
+        st.title(
+            "🤖 AI Document Intelligence"
+        )
 
         st.caption(
             "Your personal AI workspace"
@@ -1231,7 +1468,6 @@ def show_sidebar():
 
         st.divider()
 
-        # New chat
         if st.button(
             "✏️ New Chat",
             use_container_width=True
@@ -1243,14 +1479,14 @@ def show_sidebar():
 
         st.divider()
 
-        # ----------------------------------------------------
-        # Knowledge
-        # ----------------------------------------------------
-
-        st.subheader("📚 Knowledge")
+        st.subheader(
+            "📚 Knowledge"
+        )
 
         document_files = st.file_uploader(
+
             "Upload documents",
+
             type=[
                 "pdf",
                 "docx",
@@ -1258,27 +1494,33 @@ def show_sidebar():
                 "xlsx",
                 "xls",
             ],
+
             accept_multiple_files=True,
-            help=(
-                "Upload PDF, DOCX, TXT or Excel files."
-            ),
         )
 
         if document_files:
 
             current_names = {
+
                 doc.metadata.get(
                     "source",
                     ""
                 )
-                for doc in st.session_state.documents
+
+                for doc in (
+                    st.session_state.documents
+                )
             }
 
             added_count = 0
 
             for uploaded_file in document_files:
 
-                if uploaded_file.name in current_names:
+                if (
+                    uploaded_file.name
+                    in current_names
+                ):
+
                     continue
 
                 try:
@@ -1287,9 +1529,11 @@ def show_sidebar():
                         uploaded_file.getvalue()
                     )
 
-                    extracted = extract_document(
-                        file_bytes,
-                        uploaded_file.name
+                    extracted = (
+                        extract_document(
+                            file_bytes,
+                            uploaded_file.name
+                        )
                     )
 
                     if extracted:
@@ -1307,13 +1551,13 @@ def show_sidebar():
                 except Exception as error:
 
                     st.error(
-                        f"{uploaded_file.name}: "
-                        f"{error}"
+                        f"{uploaded_file.name}: {error}"
                     )
 
-            if added_count > 0:
+            if added_count:
 
                 st.session_state.vectorstore = None
+
                 st.session_state.vectorstore_signature = None
 
                 st.success(
@@ -1321,61 +1565,73 @@ def show_sidebar():
                 )
 
         # ----------------------------------------------------
-        # Images
+        # IMAGES
         # ----------------------------------------------------
 
         image_files = st.file_uploader(
+
             "Upload images",
+
             type=[
                 "png",
                 "jpg",
                 "jpeg",
                 "webp",
             ],
+
             accept_multiple_files=True,
-            help=(
-                "Upload images and ask questions "
-                "about them."
-            ),
         )
 
         if image_files:
 
             existing_names = {
+
                 image["name"]
-                for image in st.session_state.images
+
+                for image in (
+                    st.session_state.images
+                )
             }
 
             for image_file in image_files:
 
-                if image_file.name in existing_names:
+                if (
+                    image_file.name
+                    in existing_names
+                ):
+
                     continue
 
                 st.session_state.images.append(
                     {
-                        "name": image_file.name,
-                        "mime_type": (
+                        "name":
+                            image_file.name,
+
+                        "mime_type":
                             image_file.type
-                            or "image/jpeg"
-                        ),
-                        "data": (
-                            image_file.getvalue()
-                        ),
+                            or
+                            "image/jpeg",
+
+                        "data":
+                            image_file.getvalue(),
                     }
                 )
 
         # ----------------------------------------------------
-        # Website
+        # WEBSITE
         # ----------------------------------------------------
 
-        st.subheader("🌐 Website")
+        st.subheader(
+            "🌐 Website"
+        )
 
         website_url = st.text_input(
             "Website URL",
             value=(
                 st.session_state.website_url
             ),
-            placeholder="https://example.com",
+            placeholder=
+                "https://example.com",
         )
 
         if st.button(
@@ -1409,20 +1665,14 @@ def show_sidebar():
                             website_url
                         )
 
-                        st.session_state.website_loaded = (
-                            True
-                        )
+                        st.session_state.website_loaded = True
 
-                        st.session_state.vectorstore = (
-                            None
-                        )
+                        st.session_state.vectorstore = None
 
-                        st.session_state.vectorstore_signature = (
-                            None
-                        )
+                        st.session_state.vectorstore_signature = None
 
                         st.success(
-                            "Website loaded."
+                            "Website loaded successfully."
                         )
 
                     else:
@@ -1438,14 +1688,16 @@ def show_sidebar():
                     )
 
         # ----------------------------------------------------
-        # Current files
+        # LOADED DOCUMENTS
         # ----------------------------------------------------
 
         if st.session_state.documents:
 
             st.divider()
 
-            st.subheader("📄 Loaded Documents")
+            st.subheader(
+                "📄 Loaded Documents"
+            )
 
             source_names = []
 
@@ -1470,9 +1722,15 @@ def show_sidebar():
                     f"📄 {source}"
                 )
 
+        # ----------------------------------------------------
+        # LOADED IMAGES
+        # ----------------------------------------------------
+
         if st.session_state.images:
 
-            st.subheader("🖼️ Loaded Images")
+            st.subheader(
+                "🖼️ Loaded Images"
+            )
 
             for image in (
                 st.session_state.images
@@ -1483,12 +1741,13 @@ def show_sidebar():
                 )
 
         # ----------------------------------------------------
-        # Clear knowledge
+        # CLEAR KNOWLEDGE
         # ----------------------------------------------------
 
         if (
             st.session_state.documents
-            or st.session_state.images
+            or
+            st.session_state.images
         ):
 
             if st.button(
@@ -1497,21 +1756,28 @@ def show_sidebar():
             ):
 
                 st.session_state.documents = []
+
                 st.session_state.images = []
+
                 st.session_state.vectorstore = None
+
                 st.session_state.vectorstore_signature = None
+
                 st.session_state.website_url = ""
+
                 st.session_state.website_loaded = False
 
                 st.rerun()
 
         # ----------------------------------------------------
-        # Chat history
+        # CHAT HISTORY
         # ----------------------------------------------------
 
         st.divider()
 
-        st.subheader("💬 Chats")
+        st.subheader(
+            "💬 Chats"
+        )
 
         user_chats = get_user_chats(
             st.session_state.username
@@ -1553,7 +1819,7 @@ def show_sidebar():
 
                     if st.button(
                         "×",
-                        key=f"delete_{chat_id}",
+                        key=f"delete_{chat_id}"
                     ):
 
                         delete_chat(
@@ -1565,14 +1831,12 @@ def show_sidebar():
                             == chat_id
                         ):
 
-                            st.session_state.current_chat_id = (
-                                None
-                            )
+                            st.session_state.current_chat_id = None
 
                         st.rerun()
 
         # ----------------------------------------------------
-        # Logout
+        # LOGOUT
         # ----------------------------------------------------
 
         st.divider()
@@ -1583,22 +1847,30 @@ def show_sidebar():
         ):
 
             st.session_state.logged_in = False
+
             st.session_state.username = ""
+
             st.session_state.current_chat_id = None
+
             st.session_state.documents = []
+
             st.session_state.images = []
+
             st.session_state.vectorstore = None
 
             st.rerun()
 
 
 # ============================================================
-# 26. DISPLAY CHAT HISTORY
+# DISPLAY CHAT HISTORY
 # ============================================================
 
-def display_chat_history(chat):
+def display_chat_history(
+    chat
+):
 
     if not chat:
+
         return
 
     messages = chat.get(
@@ -1618,7 +1890,9 @@ def display_chat_history(chat):
             ""
         )
 
-        with st.chat_message(role):
+        with st.chat_message(
+            role
+        ):
 
             st.markdown(
                 content
@@ -1643,7 +1917,7 @@ def display_chat_history(chat):
 
 
 # ============================================================
-# 27. WELCOME SCREEN
+# WELCOME
 # ============================================================
 
 def show_welcome():
@@ -1651,7 +1925,8 @@ def show_welcome():
     greeting = get_time_greeting()
 
     st.title(
-        f"{greeting}, {st.session_state.username}! 👋"
+        f"{greeting}, "
+        f"{st.session_state.username}! 👋"
     )
 
     st.write(
@@ -1660,22 +1935,24 @@ def show_welcome():
 
     st.divider()
 
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3 = st.columns(
+        3
+    )
 
     with col1:
 
         st.info(
             "📄 **Documents**\n\n"
-            "Upload PDFs, Word files, TXT "
-            "or Excel files and ask questions."
+            "Upload PDF, Word, TXT or Excel "
+            "files and ask questions."
         )
 
     with col2:
 
         st.info(
             "🖼️ **Images**\n\n"
-            "Upload images and ask the AI "
-            "to understand their content."
+            "Upload images and ask questions "
+            "about their content."
         )
 
     with col3:
@@ -1689,20 +1966,23 @@ def show_welcome():
     st.divider()
 
     st.caption(
-        "💡 Tip: Upload your files from the sidebar, "
-        "then ask your question below."
+        "💡 Upload your files from the sidebar "
+        "and ask your question below."
     )
 
 
 # ============================================================
-# 28. MAIN CHAT
+# MAIN CHAT
 # ============================================================
 
 def show_chat():
 
     rebuild_rag_if_needed()
 
-    if st.session_state.current_chat_id is None:
+    if (
+        st.session_state.current_chat_id
+        is None
+    ):
 
         show_welcome()
 
@@ -1735,27 +2015,24 @@ def show_chat():
                 chat
             )
 
-    # --------------------------------------------------------
-    # Chat input
-    # --------------------------------------------------------
-
     question = st.chat_input(
         "Ask anything about your documents..."
     )
 
     if not question:
+
         return
 
     question = question.strip()
 
     if not question:
+
         return
 
-    # --------------------------------------------------------
-    # Ensure chat exists
-    # --------------------------------------------------------
-
-    if st.session_state.current_chat_id is None:
+    if (
+        st.session_state.current_chat_id
+        is None
+    ):
 
         start_new_chat()
 
@@ -1763,19 +2040,22 @@ def show_chat():
         st.session_state.current_chat_id
     )
 
-    chat = get_chat(chat_id)
+    chat = get_chat(
+        chat_id
+    )
 
     if not chat:
+
         return
 
-    # --------------------------------------------------------
-    # First question becomes title
-    # --------------------------------------------------------
+    if chat.get(
+        "title"
+    ) == "New Chat":
 
-    if chat.get("title") == "New Chat":
-
-        chat["title"] = make_chat_title(
-            question
+        chat["title"] = (
+            make_chat_title(
+                question
+            )
         )
 
         save_chat(
@@ -1783,11 +2063,9 @@ def show_chat():
             chat
         )
 
-    # --------------------------------------------------------
-    # Display user question
-    # --------------------------------------------------------
-
-    with st.chat_message("user"):
+    with st.chat_message(
+        "user"
+    ):
 
         st.markdown(
             question
@@ -1799,10 +2077,6 @@ def show_chat():
         question
     )
 
-    # --------------------------------------------------------
-    # Search documents
-    # --------------------------------------------------------
-
     retrieved_documents = (
         search_documents(
             question
@@ -1811,27 +2085,34 @@ def show_chat():
 
     source_names = []
 
-    for document in retrieved_documents:
+    for document in (
+        retrieved_documents
+    ):
 
         source = document.metadata.get(
             "source"
         )
 
-        if source and source not in source_names:
+        if (
+            source
+            and
+            source not in source_names
+        ):
 
             source_names.append(
                 source
             )
 
-    # --------------------------------------------------------
-    # Generate AI response
-    # --------------------------------------------------------
-
-    with st.chat_message("assistant"):
+    with st.chat_message(
+        "assistant"
+    ):
 
         answer = stream_answer(
+
             question,
+
             retrieved_documents,
+
             st.session_state.images
         )
 
@@ -1850,15 +2131,19 @@ def show_chat():
                         )
 
             add_message_to_chat(
+
                 chat_id,
+
                 "assistant",
+
                 answer,
+
                 source_names
             )
 
 
 # ============================================================
-# 29. APPLICATION ENTRY POINT
+# MAIN APPLICATION
 # ============================================================
 
 def main():
@@ -1875,7 +2160,7 @@ def main():
 
 
 # ============================================================
-# 30. RUN APPLICATION
+# START
 # ============================================================
 
 if __name__ == "__main__":
@@ -1884,14 +2169,16 @@ if __name__ == "__main__":
 
         main()
 
-    except Exception as error:
+    except Exception:
 
         st.error(
-            "Something went wrong in the application."
+            "❌ Something went wrong."
         )
 
         with st.expander(
             "Show technical error"
         ):
 
-            st.exception(error)
+            st.exception(
+                Exception
+            )
