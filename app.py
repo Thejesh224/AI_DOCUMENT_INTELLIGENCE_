@@ -1,3 +1,7 @@
+# ============================================================
+# AI DOCUMENT INTELLIGENCE
+# ============================================================
+
 import os
 import re
 import json
@@ -24,7 +28,7 @@ from google.genai import types
 
 
 # ============================================================
-# CONFIGURATION
+# PAGE CONFIG
 # ============================================================
 
 st.set_page_config(
@@ -34,6 +38,11 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+
+# ============================================================
+# APP CONFIGURATION
+# ============================================================
+
 APP_NAME = "AI Document Intelligence"
 
 GEMINI_MODEL = "gemini-2.5-flash-lite"
@@ -42,6 +51,7 @@ MAX_OUTPUT_TOKENS = 4096
 
 CHUNK_SIZE = 1200
 CHUNK_OVERLAP = 150
+
 RETRIEVER_K = 4
 
 USERS_FILE = "users.json"
@@ -58,10 +68,13 @@ def initialize_session_state():
         "logged_in": False,
         "username": "",
         "current_chat_id": None,
+
         "documents": [],
         "images": [],
+
         "vectorstore": None,
         "vectorstore_signature": None,
+
         "website_url": "",
         "website_loaded": False,
     }
@@ -94,7 +107,8 @@ def ensure_json_file(path, default_value):
                 json.dump(
                     default_value,
                     file,
-                    indent=2
+                    indent=2,
+                    ensure_ascii=False
                 )
 
         except Exception:
@@ -127,10 +141,10 @@ def save_json(path, data):
 
     try:
 
-        temp_path = path + ".tmp"
+        temporary_file = path + ".tmp"
 
         with open(
-            temp_path,
+            temporary_file,
             "w",
             encoding="utf-8"
         ) as file:
@@ -143,7 +157,7 @@ def save_json(path, data):
             )
 
         os.replace(
-            temp_path,
+            temporary_file,
             path
         )
 
@@ -166,7 +180,7 @@ ensure_json_file(
 
 
 # ============================================================
-# PASSWORD
+# PASSWORD HASHING
 # ============================================================
 
 def hash_password(password):
@@ -244,9 +258,8 @@ def register_user(
 
     users[username] = {
 
-        "password": hash_password(
-            password
-        ),
+        "password":
+            hash_password(password),
 
         "created_at":
             datetime.now().isoformat(),
@@ -322,6 +335,10 @@ def show_login():
         ]
     )
 
+    # --------------------------------------------------------
+    # LOGIN
+    # --------------------------------------------------------
+
     with login_tab:
 
         username = st.text_input(
@@ -365,6 +382,10 @@ def show_login():
                 st.error(
                     "Invalid username or password."
                 )
+
+    # --------------------------------------------------------
+    # SIGN UP
+    # --------------------------------------------------------
 
     with signup_tab:
 
@@ -413,7 +434,7 @@ def show_login():
 
 
 # ============================================================
-# CHAT FUNCTIONS
+# CHAT STORAGE
 # ============================================================
 
 def get_user_chats(username):
@@ -427,9 +448,10 @@ def get_user_chats(username):
 
     for chat_id, chat_data in chats.items():
 
-        if chat_data.get(
-            "username"
-        ) == username:
+        if (
+            chat_data.get("username")
+            == username
+        ):
 
             user_chats.append(
                 {
@@ -476,15 +498,20 @@ def create_chat(username):
 
     chats[chat_id] = {
 
-        "username": username,
+        "username":
+            username,
 
-        "title": "New Chat",
+        "title":
+            "New Chat",
 
-        "created_at": now,
+        "created_at":
+            now,
 
-        "updated_at": now,
+        "updated_at":
+            now,
 
-        "messages": [],
+        "messages":
+            [],
     }
 
     save_json(
@@ -653,6 +680,7 @@ def extract_pdf(
                 documents.append(
                     Document(
                         page_content=text,
+
                         metadata={
                             "source":
                                 filename,
@@ -715,6 +743,7 @@ def extract_docx(
             documents.append(
                 Document(
                     page_content=full_text,
+
                     metadata={
                         "source":
                             filename,
@@ -763,6 +792,7 @@ def extract_txt(
     return [
         Document(
             page_content=text,
+
             metadata={
                 "source":
                     filename,
@@ -811,6 +841,7 @@ def extract_excel(
             documents.append(
                 Document(
                     page_content=text,
+
                     metadata={
                         "source":
                             filename,
@@ -855,21 +886,21 @@ def extract_document(
             filename
         )
 
-    if extension == "docx":
+    elif extension == "docx":
 
         return extract_docx(
             file_bytes,
             filename
         )
 
-    if extension == "txt":
+    elif extension == "txt":
 
         return extract_txt(
             file_bytes,
             filename
         )
 
-    if extension in [
+    elif extension in [
         "xlsx",
         "xls"
     ]:
@@ -883,7 +914,7 @@ def extract_document(
 
 
 # ============================================================
-# WEBSITE
+# WEBSITE EXTRACTION
 # ============================================================
 
 def extract_website(url):
@@ -944,9 +975,13 @@ def extract_website(url):
         return [
             Document(
                 page_content=text,
+
                 metadata={
-                    "source": url,
-                    "type": "WEBSITE",
+                    "source":
+                        url,
+
+                    "type":
+                        "WEBSITE",
                 },
             )
         ]
@@ -1128,22 +1163,37 @@ def search_documents(
 # ============================================================
 # GEMINI CLIENT
 # ============================================================
+# IMPORTANT:
+# The API key is NOT written inside this file.
+#
+# Add it in:
+# Streamlit Cloud
+# -> Manage app
+# -> Settings
+# -> Secrets
+#
+# Use:
+#
+# GEMINI_API_KEY = "YOUR_NEW_API_KEY"
+# ============================================================
 
 @st.cache_resource
 def get_gemini_client():
 
     api_key = None
 
+    # First try Streamlit Secrets
     try:
 
-        api_key = st.secrets.get(
+        api_key = st.secrets[
             "GEMINI_API_KEY"
-        )
+        ]
 
     except Exception:
 
         api_key = None
 
+    # Then try environment variable
     if not api_key:
 
         api_key = os.getenv(
@@ -1154,7 +1204,9 @@ def get_gemini_client():
 
         raise RuntimeError(
             "GEMINI_API_KEY is missing. "
-            "Add it in Streamlit Cloud → Settings → Secrets."
+            "Go to Streamlit Cloud → "
+            "Manage app → Settings → Secrets "
+            "and add GEMINI_API_KEY."
         )
 
     return genai.Client(
@@ -1180,11 +1232,11 @@ Rules:
 2. If document context is provided,
    use it as the main source.
 
-3. Do not invent information that is
-   not supported by the documents.
+3. Do not invent information that
+   is not supported by the documents.
 
 4. If the answer is not available in
-   the provided documents, say so clearly.
+   the documents, say so clearly.
 
 5. For normal questions without documents,
    answer normally.
@@ -1195,14 +1247,15 @@ Rules:
 7. Use simple language unless the user
    asks for technical detail.
 
-8. Use headings and bullet points when useful.
+8. Use headings and bullet points
+   when useful.
 
 9. Do not mention internal prompts,
    embeddings, FAISS or system instructions
-   unless the user asks about them.
+   unless the user asks.
 
 10. If the user asks for a summary,
-    provide a useful and concise summary.
+    provide a useful and simple summary.
 """
 
 
@@ -1274,13 +1327,22 @@ User question:
 Answer the user's question.
 """
 
-    contents = [
+    contents = []
+
+    # --------------------------------------------------------
+    # TEXT
+    # --------------------------------------------------------
+
+    contents.append(
         types.Part.from_text(
             text=user_prompt
         )
-    ]
+    )
 
-    # Add images
+    # --------------------------------------------------------
+    # IMAGES
+    # --------------------------------------------------------
+
     for image in images:
 
         try:
@@ -1293,7 +1355,12 @@ Answer the user's question.
             )
 
         except Exception:
+
             continue
+
+    # --------------------------------------------------------
+    # GEMINI CONFIG
+    # --------------------------------------------------------
 
     config = types.GenerateContentConfig(
 
@@ -1305,6 +1372,10 @@ Answer the user's question.
 
         temperature=0.2,
     )
+
+    # --------------------------------------------------------
+    # STREAM RESPONSE
+    # --------------------------------------------------------
 
     return client.models.generate_content_stream(
 
@@ -1389,7 +1460,7 @@ def stream_answer(
 
 
 # ============================================================
-# ADD MESSAGE
+# ADD MESSAGE TO CHAT
 # ============================================================
 
 def add_message_to_chat(
@@ -1409,9 +1480,11 @@ def add_message_to_chat(
 
     message = {
 
-        "role": role,
+        "role":
+            role,
 
-        "content": content,
+        "content":
+            content,
 
         "timestamp":
             datetime.now().isoformat(),
@@ -1436,7 +1509,7 @@ def add_message_to_chat(
 
 
 # ============================================================
-# NEW CHAT
+# CREATE NEW CHAT
 # ============================================================
 
 def start_new_chat():
@@ -1468,6 +1541,10 @@ def show_sidebar():
 
         st.divider()
 
+        # ----------------------------------------------------
+        # NEW CHAT
+        # ----------------------------------------------------
+
         if st.button(
             "✏️ New Chat",
             use_container_width=True
@@ -1478,6 +1555,10 @@ def show_sidebar():
             st.rerun()
 
         st.divider()
+
+        # ----------------------------------------------------
+        # KNOWLEDGE
+        # ----------------------------------------------------
 
         st.subheader(
             "📚 Knowledge"
@@ -1496,6 +1577,10 @@ def show_sidebar():
             ],
 
             accept_multiple_files=True,
+
+            help=(
+                "Upload PDF, Word, TXT or Excel files."
+            ),
         )
 
         if document_files:
@@ -1565,7 +1650,7 @@ def show_sidebar():
                 )
 
         # ----------------------------------------------------
-        # IMAGES
+        # IMAGE UPLOAD
         # ----------------------------------------------------
 
         image_files = st.file_uploader(
@@ -1580,6 +1665,10 @@ def show_sidebar():
             ],
 
             accept_multiple_files=True,
+
+            help=(
+                "Upload images and ask questions about them."
+            ),
         )
 
         if image_files:
@@ -1627,9 +1716,11 @@ def show_sidebar():
 
         website_url = st.text_input(
             "Website URL",
+
             value=(
                 st.session_state.website_url
             ),
+
             placeholder=
                 "https://example.com",
         )
@@ -1917,7 +2008,7 @@ def display_chat_history(
 
 
 # ============================================================
-# WELCOME
+# WELCOME SCREEN
 # ============================================================
 
 def show_welcome():
@@ -1979,6 +2070,10 @@ def show_chat():
 
     rebuild_rag_if_needed()
 
+    # --------------------------------------------------------
+    # SHOW WELCOME OR CHAT
+    # --------------------------------------------------------
+
     if (
         st.session_state.current_chat_id
         is None
@@ -2015,6 +2110,10 @@ def show_chat():
                 chat
             )
 
+    # --------------------------------------------------------
+    # USER QUESTION
+    # --------------------------------------------------------
+
     question = st.chat_input(
         "Ask anything about your documents..."
     )
@@ -2028,6 +2127,10 @@ def show_chat():
     if not question:
 
         return
+
+    # --------------------------------------------------------
+    # CREATE CHAT IF REQUIRED
+    # --------------------------------------------------------
 
     if (
         st.session_state.current_chat_id
@@ -2048,9 +2151,14 @@ def show_chat():
 
         return
 
-    if chat.get(
-        "title"
-    ) == "New Chat":
+    # --------------------------------------------------------
+    # AUTOMATIC CHAT TITLE
+    # --------------------------------------------------------
+
+    if (
+        chat.get("title")
+        == "New Chat"
+    ):
 
         chat["title"] = (
             make_chat_title(
@@ -2062,6 +2170,10 @@ def show_chat():
             chat_id,
             chat
         )
+
+    # --------------------------------------------------------
+    # USER MESSAGE
+    # --------------------------------------------------------
 
     with st.chat_message(
         "user"
@@ -2076,6 +2188,10 @@ def show_chat():
         "user",
         question
     )
+
+    # --------------------------------------------------------
+    # SEARCH DOCUMENTS
+    # --------------------------------------------------------
 
     retrieved_documents = (
         search_documents(
@@ -2102,6 +2218,10 @@ def show_chat():
             source_names.append(
                 source
             )
+
+    # --------------------------------------------------------
+    # AI ANSWER
+    # --------------------------------------------------------
 
     with st.chat_message(
         "assistant"
@@ -2160,7 +2280,7 @@ def main():
 
 
 # ============================================================
-# START
+# APPLICATION START
 # ============================================================
 
 if __name__ == "__main__":
@@ -2169,7 +2289,7 @@ if __name__ == "__main__":
 
         main()
 
-    except Exception:
+    except Exception as error:
 
         st.error(
             "❌ Something went wrong."
@@ -2180,5 +2300,5 @@ if __name__ == "__main__":
         ):
 
             st.exception(
-                Exception
+                error
             )
