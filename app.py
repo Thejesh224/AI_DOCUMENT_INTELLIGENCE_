@@ -23,7 +23,7 @@ from transformers import (
 
 
 # ============================================================
-# PAGE CONFIGURATION
+# PAGE CONFIG
 # ============================================================
 
 st.set_page_config(
@@ -35,7 +35,7 @@ st.set_page_config(
 
 
 # ============================================================
-# FILES
+# FILES / MODELS
 # ============================================================
 
 USERS_FILE = "users.json"
@@ -54,17 +54,9 @@ st.markdown(
     """
     <style>
 
-    /* ========================================================
-       MAIN APP
-       ======================================================== */
-
     .stApp {
         background-color: #1f1e1b;
         color: #f4f1ea;
-    }
-
-    .main {
-        background-color: #1f1e1b;
     }
 
     [data-testid="stAppViewContainer"] {
@@ -74,11 +66,6 @@ st.markdown(
     [data-testid="stHeader"] {
         background-color: #1f1e1b;
     }
-
-
-    /* ========================================================
-       SIDEBAR
-       ======================================================== */
 
     [data-testid="stSidebar"] {
         background-color: #171614;
@@ -102,11 +89,6 @@ st.markdown(
         margin-bottom: 20px;
     }
 
-
-    /* ========================================================
-       BUTTONS
-       ======================================================== */
-
     .stButton > button {
         width: 100%;
         background-color: #292722;
@@ -122,11 +104,6 @@ st.markdown(
         color: #f0a45d;
     }
 
-
-    /* ========================================================
-       CHAT AREA
-       ======================================================== */
-
     [data-testid="stChatMessage"] {
         background-color: transparent;
     }
@@ -134,11 +111,6 @@ st.markdown(
     [data-testid="stChatMessageContent"] {
         color: #f4f1ea;
     }
-
-
-    /* ========================================================
-       CHAT INPUT
-       ======================================================== */
 
     [data-testid="stChatInput"] {
         background-color: #292722;
@@ -162,15 +134,10 @@ st.markdown(
         border-radius: 8px;
     }
 
-
-    /* ========================================================
-       WELCOME SCREEN
-       ======================================================== */
-
     .welcome-container {
         text-align: center;
-        margin-top: 120px;
-        margin-bottom: 40px;
+        margin-top: 110px;
+        margin-bottom: 35px;
     }
 
     .welcome-star {
@@ -190,11 +157,6 @@ st.markdown(
         margin-top: 8px;
         font-size: 15px;
     }
-
-
-    /* ========================================================
-       TOKEN BADGE
-       ======================================================== */
 
     .token-bar {
         width: 100%;
@@ -223,11 +185,6 @@ st.markdown(
         color: #f4f1ea;
         font-weight: 600;
     }
-
-
-    /* ========================================================
-       USAGE CARD
-       ======================================================== */
 
     .usage-card {
         background-color: #211f1c;
@@ -263,11 +220,6 @@ st.markdown(
         font-weight: 700;
     }
 
-
-    /* ========================================================
-       DOCUMENT INFORMATION
-       ======================================================== */
-
     .source-info {
         background-color: #292722;
         border: 1px solid #3a3731;
@@ -277,11 +229,6 @@ st.markdown(
         font-size: 12px;
         margin-bottom: 12px;
     }
-
-
-    /* ========================================================
-       LOGIN PAGE
-       ======================================================== */
 
     .login-title {
         text-align: center;
@@ -297,11 +244,6 @@ st.markdown(
         margin-bottom: 30px;
     }
 
-
-    /* ========================================================
-       FILE UPLOADER
-       ======================================================== */
-
     [data-testid="stFileUploader"] {
         background-color: #292722;
         border-radius: 10px;
@@ -314,7 +256,7 @@ st.markdown(
 
 
 # ============================================================
-# HELPER FUNCTIONS - JSON
+# JSON HELPERS
 # ============================================================
 
 def load_json(filename, default):
@@ -337,7 +279,7 @@ def save_json(filename, data):
 
 
 # ============================================================
-# USERS
+# USER FUNCTIONS
 # ============================================================
 
 def get_users():
@@ -374,7 +316,7 @@ def authenticate_user(username, password):
 
 
 # ============================================================
-# USAGE
+# USAGE FUNCTIONS
 # ============================================================
 
 def get_usage(username):
@@ -387,16 +329,13 @@ def get_usage(username):
             "output_tokens": 0,
             "total_tokens": 0,
         }
+
         save_json(USAGE_FILE, usage)
 
     return usage[username]
 
 
-def update_usage(
-    username,
-    input_tokens,
-    output_tokens,
-):
+def update_usage(username, input_tokens, output_tokens):
     usage = load_json(USAGE_FILE, {})
 
     if username not in usage:
@@ -418,7 +357,7 @@ def update_usage(
 
 
 # ============================================================
-# CHAT STORAGE
+# CHAT FUNCTIONS
 # ============================================================
 
 def get_all_chats():
@@ -430,9 +369,7 @@ def save_all_chats(chats):
 
 
 def create_new_chat():
-    chat_id = str(uuid.uuid4())
-
-    st.session_state.current_chat_id = chat_id
+    st.session_state.current_chat_id = str(uuid.uuid4())
     st.session_state.messages = []
     st.session_state.retriever = None
     st.session_state.document_text = ""
@@ -441,7 +378,6 @@ def create_new_chat():
     st.session_state.last_input_tokens = 0
     st.session_state.last_output_tokens = 0
     st.session_state.last_total_tokens = 0
-    st.session_state.chat_initialized = True
 
 
 def save_current_chat():
@@ -456,13 +392,11 @@ def save_current_chat():
     if username not in chats:
         chats[username] = {}
 
-    messages = st.session_state.messages
-
     title = "New Chat"
 
-    for message in messages:
+    for message in st.session_state.messages:
         if message.get("role") == "user":
-            title = message.get("content", "New Chat").strip()
+            title = message.get("content", "").strip()
 
             if len(title) > 45:
                 title = title[:45] + "..."
@@ -471,15 +405,10 @@ def save_current_chat():
 
     chats[username][chat_id] = {
         "title": title,
-        "messages": messages,
+        "messages": st.session_state.messages,
         "document_name": st.session_state.document_name,
         "document_text": st.session_state.document_text,
         "source_type": st.session_state.source_type,
-        "total_tokens": sum(
-            message.get("tokens", 0)
-            for message in messages
-            if message.get("role") == "assistant"
-        ),
         "updated_at": datetime.now().isoformat(),
     }
 
@@ -502,13 +431,16 @@ def load_chat(chat_id):
     st.session_state.current_chat_id = chat_id
     st.session_state.messages = chat.get("messages", [])
     st.session_state.document_name = chat.get(
-        "document_name", ""
+        "document_name",
+        "",
     )
     st.session_state.document_text = chat.get(
-        "document_text", ""
+        "document_text",
+        "",
     )
     st.session_state.source_type = chat.get(
-        "source_type", ""
+        "source_type",
+        "",
     )
 
     st.session_state.last_input_tokens = 0
@@ -516,29 +448,16 @@ def load_chat(chat_id):
     st.session_state.last_total_tokens = 0
 
     if st.session_state.document_text:
+
         try:
             st.session_state.retriever = create_retriever(
                 st.session_state.document_text
             )
         except Exception:
             st.session_state.retriever = None
+
     else:
         st.session_state.retriever = None
-
-    st.session_state.chat_initialized = True
-
-
-def delete_chat(chat_id):
-    username = st.session_state.username
-
-    chats = get_all_chats()
-
-    if username in chats and chat_id in chats[username]:
-        del chats[username][chat_id]
-        save_all_chats(chats)
-
-    if st.session_state.current_chat_id == chat_id:
-        create_new_chat()
 
 
 # ============================================================
@@ -557,10 +476,10 @@ defaults = {
     "last_input_tokens": 0,
     "last_output_tokens": 0,
     "last_total_tokens": 0,
-    "chat_initialized": False,
 }
 
 for key, value in defaults.items():
+
     if key not in st.session_state:
         st.session_state[key] = value
 
@@ -570,6 +489,7 @@ for key, value in defaults.items():
 # ============================================================
 
 def get_greeting():
+
     hour = datetime.now().hour
 
     if hour < 12:
@@ -586,22 +506,28 @@ def get_greeting():
 # ============================================================
 
 def count_tokens(tokenizer, text):
+
     try:
+
         tokens = tokenizer.encode(
             text,
             add_special_tokens=True,
         )
+
         return len(tokens)
+
     except Exception:
+
         return 0
 
 
 # ============================================================
-# MODEL
+# LOAD MODEL
 # ============================================================
 
 @st.cache_resource
 def load_model():
+
     tokenizer = AutoTokenizer.from_pretrained(
         MODEL_NAME
     )
@@ -620,11 +546,12 @@ def load_model():
 
 
 # ============================================================
-# EMBEDDINGS
+# LOAD EMBEDDINGS
 # ============================================================
 
 @st.cache_resource
 def load_embeddings():
+
     return HuggingFaceEmbeddings(
         model_name=EMBEDDING_MODEL
     )
@@ -639,6 +566,7 @@ def split_text(
     chunk_size=1000,
     overlap=200,
 ):
+
     if not text:
         return []
 
@@ -670,15 +598,15 @@ def split_text(
 
 
 # ============================================================
-# RETRIEVER
+# CREATE RETRIEVER
 # ============================================================
 
 def create_retriever(text):
 
     chunks = split_text(
         text,
-        chunk_size=1000,
-        overlap=200,
+        1000,
+        200,
     )
 
     if not chunks:
@@ -696,42 +624,37 @@ def create_retriever(text):
         embeddings,
     )
 
-    retriever = vectorstore.as_retriever(
+    return vectorstore.as_retriever(
         search_kwargs={
             "k": 2
         }
     )
 
-    return retriever
-
 
 # ============================================================
-# PDF READER
+# DOCUMENT READERS
 # ============================================================
 
 def read_pdf(uploaded_file):
 
     reader = PdfReader(uploaded_file)
 
-    text_parts = []
+    pages = []
 
     for page in reader.pages:
 
         try:
-            page_text = page.extract_text()
 
-            if page_text:
-                text_parts.append(page_text)
+            text = page.extract_text()
+
+            if text:
+                pages.append(text)
 
         except Exception:
-            continue
+            pass
 
-    return "\n".join(text_parts)
+    return "\n".join(pages)
 
-
-# ============================================================
-# DOCX READER
-# ============================================================
 
 def read_docx(uploaded_file):
 
@@ -749,50 +672,47 @@ def read_docx(uploaded_file):
     return "\n".join(paragraphs)
 
 
-# ============================================================
-# XLSX READER
-# ============================================================
-
 def read_xlsx(uploaded_file):
 
-    excel_file = pd.ExcelFile(uploaded_file)
+    excel_file = pd.ExcelFile(
+        uploaded_file
+    )
 
-    text_parts = []
+    parts = []
 
-    for sheet_name in excel_file.sheet_names:
+    for sheet in excel_file.sheet_names:
 
         try:
+
             dataframe = pd.read_excel(
                 excel_file,
-                sheet_name=sheet_name,
+                sheet_name=sheet,
             )
 
-            text_parts.append(
-                f"Sheet: {sheet_name}"
+            parts.append(
+                f"Sheet: {sheet}"
             )
 
-            text_parts.append(
+            parts.append(
                 dataframe.to_string(
                     index=False
                 )
             )
 
         except Exception:
-            continue
+            pass
 
-    return "\n".join(text_parts)
+    return "\n".join(parts)
 
-
-# ============================================================
-# TXT READER
-# ============================================================
 
 def read_txt(uploaded_file):
 
     try:
+
         return uploaded_file.read().decode(
             "utf-8"
         )
+
     except Exception:
 
         uploaded_file.seek(0)
@@ -801,10 +721,6 @@ def read_txt(uploaded_file):
             "latin-1"
         )
 
-
-# ============================================================
-# WEBSITE READER
-# ============================================================
 
 def read_website(url):
 
@@ -848,24 +764,20 @@ def read_website(url):
     )
 
 
-# ============================================================
-# DOCUMENT PROCESSOR
-# ============================================================
-
 def process_document(uploaded_file):
 
-    file_name = uploaded_file.name.lower()
+    name = uploaded_file.name.lower()
 
-    if file_name.endswith(".pdf"):
+    if name.endswith(".pdf"):
         return read_pdf(uploaded_file)
 
-    if file_name.endswith(".docx"):
+    if name.endswith(".docx"):
         return read_docx(uploaded_file)
 
-    if file_name.endswith(".xlsx"):
+    if name.endswith(".xlsx"):
         return read_xlsx(uploaded_file)
 
-    if file_name.endswith(".txt"):
+    if name.endswith(".txt"):
         return read_txt(uploaded_file)
 
     return ""
@@ -877,17 +789,39 @@ def process_document(uploaded_file):
 
 def show_login_page():
 
-    st.markdown(
+    st.html(
         """
-        <div class="login-title">
-            AI Document Intelligence
-        </div>
+        <div style="
+            text-align:center;
+            margin-top:60px;
+        ">
 
-        <div class="login-subtitle">
-            Ask questions about your documents and websites.
+            <div style="
+                font-size:42px;
+                color:#f0a45d;
+                margin-bottom:14px;
+            ">
+                ✦
+            </div>
+
+            <div style="
+                font-size:34px;
+                font-weight:700;
+                color:#f4f1ea;
+            ">
+                AI Document Intelligence
+            </div>
+
+            <div style="
+                color:#9f9990;
+                margin-top:8px;
+                font-size:15px;
+            ">
+                Ask questions about your documents and websites.
+            </div>
+
         </div>
-        """,
-        unsafe_allow_html=True,
+        """
     )
 
     left, center, right = st.columns(
@@ -902,10 +836,6 @@ def show_login_page():
                 "Create Account",
             ]
         )
-
-        # ----------------------------------------------------
-        # LOGIN
-        # ----------------------------------------------------
 
         with login_tab:
 
@@ -943,21 +873,17 @@ def show_login_page():
                         "Invalid username or password."
                     )
 
-        # ----------------------------------------------------
-        # CREATE ACCOUNT
-        # ----------------------------------------------------
-
         with create_tab:
 
             new_username = st.text_input(
                 "Username",
-                key="create_username",
+                key="new_username",
             )
 
             new_password = st.text_input(
                 "Password",
                 type="password",
-                key="create_password",
+                key="new_password",
             )
 
             confirm_password = st.text_input(
@@ -968,7 +894,7 @@ def show_login_page():
 
             if st.button(
                 "Create Account",
-                key="create_account_button",
+                key="create_button",
             ):
 
                 if not new_username or not new_password:
@@ -1004,11 +930,7 @@ def show_sidebar():
 
     with st.sidebar:
 
-        # ----------------------------------------------------
-        # BRAND
-        # ----------------------------------------------------
-
-        st.markdown(
+        st.html(
             """
             <div class="sidebar-brand">
                 ✦ AI Document Intelligence
@@ -1017,43 +939,29 @@ def show_sidebar():
             <div class="sidebar-subtitle">
                 Document & website assistant
             </div>
-            """,
-            unsafe_allow_html=True,
+            """
         )
-
-        # ----------------------------------------------------
-        # NEW CHAT
-        # ----------------------------------------------------
 
         if st.button(
             "＋  New Chat",
-            key="new_chat_button",
+            key="new_chat",
         ):
 
             create_new_chat()
 
             st.rerun()
 
-        st.markdown(
-            "<br>",
-            unsafe_allow_html=True,
-        )
-
-        # ----------------------------------------------------
-        # CONVERSATIONS
-        # ----------------------------------------------------
-
-        st.markdown(
+        st.html(
             """
             <div style="
                 color:#9f9990;
                 font-size:12px;
+                margin-top:20px;
                 margin-bottom:8px;
             ">
                 CONVERSATIONS
             </div>
-            """,
-            unsafe_allow_html=True,
+            """
         )
 
         chats = get_all_chats()
@@ -1074,7 +982,7 @@ def show_sidebar():
 
         if not sorted_chats:
 
-            st.markdown(
+            st.html(
                 """
                 <div style="
                     color:#817c73;
@@ -1083,8 +991,7 @@ def show_sidebar():
                 ">
                     No conversations yet.
                 </div>
-                """,
-                unsafe_allow_html=True,
+                """
             )
 
         else:
@@ -1101,7 +1008,7 @@ def show_sidebar():
 
                 if st.button(
                     title,
-                    key=f"chat_{chat_id}",
+                    key=f"conversation_{chat_id}",
                 ):
 
                     load_chat(chat_id)
@@ -1109,75 +1016,58 @@ def show_sidebar():
                     st.rerun()
 
         # ----------------------------------------------------
-        # TOKEN USAGE
+        # USAGE CARD
         # ----------------------------------------------------
 
         usage = get_usage(
             st.session_state.username
         )
 
-        st.markdown(
-            """
-            <div class="usage-card">
-            """,
-            unsafe_allow_html=True,
-        )
-
-        # FIXED TOKEN USAGE HTML
-        st.markdown(
+        st.html(
             f"""
-            <div class="usage-header">
-                Token Usage
-            </div>
+            <div class="usage-card">
 
-            <div class="usage-row">
-                <span>Requests</span>
-                <span class="usage-number">
-                    {usage.get("requests", 0)}
-                </span>
-            </div>
+                <div class="usage-header">
+                    Token Usage
+                </div>
 
-            <div class="usage-row">
-                <span>Input tokens</span>
-                <span class="usage-number">
-                    {usage.get("input_tokens", 0)}
-                </span>
-            </div>
+                <div class="usage-row">
+                    <span>Requests</span>
+                    <span class="usage-number">
+                        {usage.get("requests", 0)}
+                    </span>
+                </div>
 
-            <div class="usage-row">
-                <span>Output tokens</span>
-                <span class="usage-number">
-                    {usage.get("output_tokens", 0)}
-                </span>
-            </div>
+                <div class="usage-row">
+                    <span>Input tokens</span>
+                    <span class="usage-number">
+                        {usage.get("input_tokens", 0)}
+                    </span>
+                </div>
 
-            <div class="usage-row">
-                <span>Total tokens</span>
-                <span class="usage-total">
-                    {usage.get("total_tokens", 0)}
-                </span>
+                <div class="usage-row">
+                    <span>Output tokens</span>
+                    <span class="usage-number">
+                        {usage.get("output_tokens", 0)}
+                    </span>
+                </div>
+
+                <div class="usage-row">
+                    <span>Total tokens</span>
+                    <span class="usage-total">
+                        {usage.get("total_tokens", 0)}
+                    </span>
+                </div>
+
             </div>
-            """,
-            unsafe_allow_html=True,
+            """
         )
 
-        st.markdown(
-            "</div>",
-            unsafe_allow_html=True,
-        )
-
-        st.markdown(
-            "<br>",
-            unsafe_allow_html=True,
-        )
-
-        # ----------------------------------------------------
-        # LOGOUT
-        # ----------------------------------------------------
+        st.markdown("")
 
         if st.button(
             "Logout",
-            key="logout_button",
+            key="logout",
         ):
 
             st.session_state.logged_in = False
@@ -1192,18 +1082,18 @@ def show_sidebar():
 
 
 # ============================================================
-# MAIN APPLICATION
+# MAIN APP
 # ============================================================
 
 def show_main_app():
 
     show_sidebar()
 
-    # --------------------------------------------------------
-    # HEADER
-    # --------------------------------------------------------
+    # ========================================================
+    # TOP HEADER
+    # ========================================================
 
-    st.markdown(
+    st.html(
         """
         <div style="
             text-align:center;
@@ -1236,22 +1126,21 @@ def show_main_app():
             </div>
 
         </div>
-        """,
-        unsafe_allow_html=True,
+        """
     )
 
-    # --------------------------------------------------------
-    # SOURCE SECTION
-    # --------------------------------------------------------
+    # ========================================================
+    # SOURCE TABS
+    # ========================================================
 
-    source_tab_1, source_tab_2 = st.tabs(
+    document_tab, website_tab = st.tabs(
         [
             "📄 Document",
             "🌐 Website",
         ]
     )
 
-    with source_tab_1:
+    with document_tab:
 
         uploaded_file = st.file_uploader(
             "Upload a document",
@@ -1261,7 +1150,7 @@ def show_main_app():
                 "docx",
                 "xlsx",
             ],
-            key="document_uploader",
+            key="document_upload",
         )
 
         if uploaded_file is not None:
@@ -1277,11 +1166,11 @@ def show_main_app():
 
                     try:
 
-                        document_text = process_document(
+                        text = process_document(
                             uploaded_file
                         )
 
-                        if not document_text.strip():
+                        if not text.strip():
 
                             st.error(
                                 "Could not extract text from this document."
@@ -1290,21 +1179,16 @@ def show_main_app():
                         else:
 
                             retriever = create_retriever(
-                                document_text
+                                text
                             )
 
-                            st.session_state.document_text = (
-                                document_text
-                            )
-
+                            st.session_state.document_text = text
                             st.session_state.document_name = (
                                 uploaded_file.name
                             )
-
                             st.session_state.source_type = (
                                 "Document"
                             )
-
                             st.session_state.retriever = (
                                 retriever
                             )
@@ -1321,7 +1205,7 @@ def show_main_app():
                             f"Error processing document: {error}"
                         )
 
-    with source_tab_2:
+    with website_tab:
 
         website_url = st.text_input(
             "Enter website URL",
@@ -1331,7 +1215,7 @@ def show_main_app():
 
         if st.button(
             "Load Website",
-            key="load_website_button",
+            key="load_website",
         ):
 
             if not website_url.strip():
@@ -1348,11 +1232,11 @@ def show_main_app():
 
                     try:
 
-                        website_text = read_website(
+                        text = read_website(
                             website_url.strip()
                         )
 
-                        if not website_text.strip():
+                        if not text.strip():
 
                             st.error(
                                 "Could not extract text from this website."
@@ -1361,21 +1245,16 @@ def show_main_app():
                         else:
 
                             retriever = create_retriever(
-                                website_text
+                                text
                             )
 
-                            st.session_state.document_text = (
-                                website_text
-                            )
-
+                            st.session_state.document_text = text
                             st.session_state.document_name = (
                                 website_url.strip()
                             )
-
                             st.session_state.source_type = (
                                 "Website"
                             )
-
                             st.session_state.retriever = (
                                 retriever
                             )
@@ -1392,30 +1271,35 @@ def show_main_app():
                             f"Error loading website: {error}"
                         )
 
-    # --------------------------------------------------------
-    # SOURCE INFO
-    # --------------------------------------------------------
+    # ========================================================
+    # SOURCE INFORMATION
+    # ========================================================
 
     if st.session_state.document_name:
 
-        st.markdown(
+        st.html(
             f"""
             <div class="source-info">
                 <strong>Source:</strong>
                 {st.session_state.document_name}
             </div>
-            """,
-            unsafe_allow_html=True,
+            """
         )
 
-    # --------------------------------------------------------
-    # EXISTING CHAT MESSAGES
-    # --------------------------------------------------------
+    # ========================================================
+    # CHAT HISTORY
+    # ========================================================
 
     for message in st.session_state.messages:
 
-        role = message.get("role")
-        content = message.get("content", "")
+        role = message.get(
+            "role"
+        )
+
+        content = message.get(
+            "content",
+            "",
+        )
 
         if role == "user":
 
@@ -1439,15 +1323,19 @@ def show_main_app():
                         f"{tokens} tokens"
                     )
 
-    # --------------------------------------------------------
+    # ========================================================
     # WELCOME MESSAGE
-    # --------------------------------------------------------
+    # ========================================================
 
     if not st.session_state.messages:
 
         greeting = get_greeting()
 
-        st.markdown(
+        # IMPORTANT:
+        # This uses st.html().
+        # There is NO raw HTML outside Python.
+
+        st.html(
             f"""
             <div class="welcome-container">
 
@@ -1464,15 +1352,18 @@ def show_main_app():
                 </div>
 
             </div>
-            """,
-            unsafe_allow_html=True,
+            """
         )
 
-    # --------------------------------------------------------
+    # ========================================================
     # TOKEN BADGE
-    # --------------------------------------------------------
+    # ========================================================
 
-    st.markdown(
+    # IMPORTANT:
+    # This also uses st.html().
+    # There is NO raw HTML outside Python.
+
+    st.html(
         f"""
         <div class="token-bar">
 
@@ -1495,13 +1386,12 @@ def show_main_app():
             </div>
 
         </div>
-        """,
-        unsafe_allow_html=True,
+        """
     )
 
-    # --------------------------------------------------------
+    # ========================================================
     # CHAT INPUT
-    # --------------------------------------------------------
+    # ========================================================
 
     user_question = st.chat_input(
         "Ask anything about your document..."
@@ -1510,7 +1400,7 @@ def show_main_app():
     if user_question:
 
         # ----------------------------------------------------
-        # SAVE USER MESSAGE
+        # USER MESSAGE
         # ----------------------------------------------------
 
         st.session_state.messages.append(
@@ -1521,18 +1411,20 @@ def show_main_app():
         )
 
         # ----------------------------------------------------
-        # CHECK DOCUMENT
+        # CHECK SOURCE
         # ----------------------------------------------------
 
         if st.session_state.retriever is None:
 
+            answer = (
+                "Please upload a document "
+                "or load a website first."
+            )
+
             st.session_state.messages.append(
                 {
                     "role": "assistant",
-                    "content": (
-                        "Please upload a document "
-                        "or load a website first."
-                    ),
+                    "content": answer,
                     "tokens": 0,
                 }
             )
@@ -1556,25 +1448,20 @@ def show_main_app():
                     tokenizer, generator = load_model()
 
                     # ----------------------------------------
-                    # RETRIEVE RELEVANT CONTENT
+                    # RETRIEVE
                     # ----------------------------------------
 
-                    relevant_documents = (
+                    documents = (
                         st.session_state.retriever.invoke(
                             user_question
                         )
                     )
 
-                    context_parts = []
-
-                    for document in relevant_documents:
-
-                        context_parts.append(
-                            document.page_content
-                        )
-
                     context = "\n\n".join(
-                        context_parts
+                        [
+                            document.page_content
+                            for document in documents
+                        ]
                     )
 
                     # ----------------------------------------
@@ -1611,7 +1498,7 @@ ANSWER:
                     )
 
                     # ----------------------------------------
-                    # GENERATION
+                    # GENERATE
                     # ----------------------------------------
 
                     result = generator(
@@ -1619,9 +1506,7 @@ ANSWER:
                         max_new_tokens=100,
                         do_sample=False,
                         return_full_text=False,
-                        pad_token_id=(
-                            tokenizer.eos_token_id
-                        ),
+                        pad_token_id=tokenizer.eos_token_id,
                     )
 
                     answer = result[0][
@@ -1636,7 +1521,7 @@ ANSWER:
 
                         answer = answer.split(
                             "ANSWER:",
-                            1
+                            1,
                         )[1].strip()
 
                     # ----------------------------------------
@@ -1654,7 +1539,7 @@ ANSWER:
                     )
 
                     # ----------------------------------------
-                    # SESSION TOKEN VALUES
+                    # UPDATE TOKEN DISPLAY
                     # ----------------------------------------
 
                     st.session_state.last_input_tokens = (
@@ -1670,7 +1555,7 @@ ANSWER:
                     )
 
                     # ----------------------------------------
-                    # DISPLAY ANSWER
+                    # SHOW ANSWER
                     # ----------------------------------------
 
                     st.markdown(answer)
@@ -1680,7 +1565,7 @@ ANSWER:
                     )
 
                     # ----------------------------------------
-                    # SAVE ASSISTANT MESSAGE
+                    # SAVE MESSAGE
                     # ----------------------------------------
 
                     st.session_state.messages.append(
@@ -1692,7 +1577,7 @@ ANSWER:
                     )
 
                     # ----------------------------------------
-                    # UPDATE USAGE
+                    # USAGE
                     # ----------------------------------------
 
                     update_usage(
@@ -1711,7 +1596,8 @@ ANSWER:
 
                     error_message = (
                         "Sorry, I couldn't generate "
-                        f"the answer.\n\nError: {error}"
+                        "the answer.\n\n"
+                        f"Error: {error}"
                     )
 
                     st.error(
@@ -1728,21 +1614,17 @@ ANSWER:
 
                     save_current_chat()
 
-        # ----------------------------------------------------
-        # REFRESH UI
-        # ----------------------------------------------------
-
         st.rerun()
 
 
 # ============================================================
-# APPLICATION ENTRY POINT
+# START APPLICATION
 # ============================================================
 
-if not st.session_state.logged_in:
+if st.session_state.logged_in:
 
-    show_login_page()
+    show_main_app()
 
 else:
 
-    show_main_app()
+    show_login_page()
