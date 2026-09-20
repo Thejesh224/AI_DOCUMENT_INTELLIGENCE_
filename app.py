@@ -1,6 +1,7 @@
 # ============================================================
 # AI DOCUMENT INTELLIGENCE
-# ChatGPT-style Recent Chats + Separate Knowledge per Chat
+# ChatGPT-style Recent Chats
+# Separate Chat History + Separate Documents per Chat
 # ============================================================
 
 import os
@@ -11,14 +12,12 @@ import hashlib
 import shutil
 from pathlib import Path
 from datetime import datetime, timedelta
-from urllib.parse import urlparse
 
 import streamlit as st
 import requests
 import pandas as pd
 
 from PIL import Image
-
 from pypdf import PdfReader
 from docx import Document
 
@@ -42,182 +41,97 @@ st.set_page_config(
 
 
 # ============================================================
-# CONSTANTS
+# SETTINGS
 # ============================================================
 
 APP_NAME = "AI Document Intelligence"
 
-# Gemini model
-# You can change this from Streamlit Secrets using:
-# GEMINI_MODEL = "gemini-3.8-flash"
 GEMINI_MODEL = st.secrets.get(
     "GEMINI_MODEL",
-    os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
+    os.getenv(
+        "GEMINI_MODEL",
+        "gemini-3.8-flash"
+    )
 )
 
 MAX_OUTPUT_TOKENS = 4096
 
 CHUNK_SIZE = 1200
 CHUNK_OVERLAP = 150
-
 RETRIEVER_K = 5
 
 BASE_DIR = Path(".")
+
 USERS_FILE = BASE_DIR / "users.json"
 CHATS_FILE = BASE_DIR / "chats.json"
 
 CHAT_STORAGE = BASE_DIR / "chat_storage"
 
-CHAT_STORAGE.mkdir(exist_ok=True)
+CHAT_STORAGE.mkdir(
+    parents=True,
+    exist_ok=True
+)
 
 
 # ============================================================
-# CUSTOM CSS
+# CSS
 # ============================================================
 
 st.markdown(
     """
 <style>
 
-    /* ------------------------------
-       MAIN APP
-    ------------------------------ */
+.stApp {
+    background: #191919;
+    color: #f5f5f5;
+}
 
-    .stApp {
-        background: #191919;
-        color: #f5f5f5;
-    }
+.main .block-container {
+    max-width: 1200px;
+    padding-top: 1.5rem;
+    padding-bottom: 7rem;
+}
 
-    .main .block-container {
-        max-width: 1200px;
-        padding-top: 1.5rem;
-        padding-bottom: 7rem;
-    }
+section[data-testid="stSidebar"] {
+    background: #111111;
+    border-right: 1px solid #2d2d2d;
+}
 
+section[data-testid="stSidebar"] * {
+    color: #f5f5f5;
+}
 
-    /* ------------------------------
-       SIDEBAR
-    ------------------------------ */
+section[data-testid="stSidebar"] button {
+    border-radius: 8px;
+}
 
-    section[data-testid="stSidebar"] {
-        background: #111111;
-        border-right: 1px solid #2d2d2d;
-    }
+[data-testid="stChatMessage"] {
+    border-radius: 12px;
+}
 
-    section[data-testid="stSidebar"] * {
-        color: #f5f5f5;
-    }
+[data-testid="stChatMessageContent"] {
+    font-size: 15px;
+    line-height: 1.65;
+}
 
-    section[data-testid="stSidebar"] button {
-        border-radius: 8px;
-    }
+[data-testid="stChatInput"] {
+    background: #242424;
+}
 
-
-    /* ------------------------------
-       CHAT TITLE
-    ------------------------------ */
-
-    .app-title {
-        font-size: 30px;
-        font-weight: 700;
-        margin-bottom: 3px;
-    }
-
-    .app-subtitle {
-        color: #a8a8a8;
-        font-size: 14px;
-        margin-bottom: 20px;
-    }
-
-
-    /* ------------------------------
-       RECENT CHAT
-    ------------------------------ */
-
-    .recent-heading {
-        color: #8f8f8f;
-        font-size: 12px;
-        font-weight: 700;
-        text-transform: uppercase;
-        margin-top: 18px;
-        margin-bottom: 6px;
-        letter-spacing: 0.6px;
-    }
-
-
-    /* ------------------------------
-       CHAT BUBBLES
-    ------------------------------ */
-
-    [data-testid="stChatMessage"] {
-        border-radius: 12px;
-    }
-
-    [data-testid="stChatMessageContent"] {
-        font-size: 15px;
-        line-height: 1.65;
-    }
-
-
-    /* ------------------------------
-       INPUT
-    ------------------------------ */
-
-    [data-testid="stChatInput"] {
-        background: #242424;
-    }
-
-
-    /* ------------------------------
-       CARDS
-    ------------------------------ */
-
-    .info-card {
-        background: #222222;
-        border: 1px solid #343434;
-        border-radius: 12px;
-        padding: 15px;
-        margin-bottom: 12px;
-    }
-
-    .small-muted {
-        color: #999999;
-        font-size: 12px;
-    }
-
-
-    /* ------------------------------
-       FILE ITEMS
-    ------------------------------ */
-
-    .file-item {
-        background: #202020;
-        border: 1px solid #303030;
-        border-radius: 8px;
-        padding: 8px 10px;
-        margin-bottom: 6px;
-        font-size: 13px;
-    }
-
-
-    /* ------------------------------
-       DIVIDER
-    ------------------------------ */
-
-    .divider {
-        height: 1px;
-        background: #303030;
-        margin: 12px 0;
-    }
+.divider {
+    height: 1px;
+    background: #303030;
+    margin: 12px 0;
+}
 
 </style>
 """,
-    unsafe_allow_html=True,
+    unsafe_allow_html=True
 )
 
 
 # ============================================================
-# UTILITY FUNCTIONS
+# GENERAL HELPERS
 # ============================================================
 
 def now_iso():
@@ -225,67 +139,156 @@ def now_iso():
 
 
 def safe_username(username):
-    return re.sub(r"[^a-zA-Z0-9_.-]", "_", username)
+    return re.sub(
+        r"[^a-zA-Z0-9_.-]",
+        "_",
+        username
+    )
 
 
 def safe_filename(filename):
     filename = Path(filename).name
-    return re.sub(r"[^a-zA-Z0-9_. -]", "_", filename)
+
+    return re.sub(
+        r"[^a-zA-Z0-9_. -]",
+        "_",
+        filename
+    )
 
 
 def file_hash(data):
     return hashlib.sha256(data).hexdigest()
 
 
-def get_chat_folder(username, chat_id):
-    return (
+# ============================================================
+# CHAT FOLDERS
+# ============================================================
+
+def get_chat_folder(
+    username,
+    chat_id
+):
+
+    folder = (
         CHAT_STORAGE
         / safe_username(username)
         / chat_id
     )
 
+    folder.mkdir(
+        parents=True,
+        exist_ok=True
+    )
 
-def get_documents_folder(username, chat_id):
-    folder = get_chat_folder(username, chat_id) / "documents"
-    folder.mkdir(parents=True, exist_ok=True)
     return folder
 
 
-def get_images_folder(username, chat_id):
-    folder = get_chat_folder(username, chat_id) / "images"
-    folder.mkdir(parents=True, exist_ok=True)
+def get_documents_folder(
+    username,
+    chat_id
+):
+
+    folder = (
+        get_chat_folder(
+            username,
+            chat_id
+        )
+        / "documents"
+    )
+
+    folder.mkdir(
+        parents=True,
+        exist_ok=True
+    )
+
     return folder
 
 
-def get_knowledge_file(username, chat_id):
-    folder = get_chat_folder(username, chat_id)
-    folder.mkdir(parents=True, exist_ok=True)
-    return folder / "knowledge.json"
+def get_images_folder(
+    username,
+    chat_id
+):
+
+    folder = (
+        get_chat_folder(
+            username,
+            chat_id
+        )
+        / "images"
+    )
+
+    folder.mkdir(
+        parents=True,
+        exist_ok=True
+    )
+
+    return folder
+
+
+def get_knowledge_file(
+    username,
+    chat_id
+):
+
+    return (
+        get_chat_folder(
+            username,
+            chat_id
+        )
+        / "knowledge.json"
+    )
 
 
 # ============================================================
-# JSON STORAGE
+# JSON FUNCTIONS
 # ============================================================
 
-def load_json(path, default):
+def load_json(
+    path,
+    default
+):
+
     try:
+
         if not path.exists():
             return default
 
-        with open(path, "r", encoding="utf-8") as f:
-            return json.load(f)
+        with open(
+            path,
+            "r",
+            encoding="utf-8"
+        ) as file:
+
+            return json.load(file)
 
     except Exception:
+
         return default
 
 
-def save_json(path, data):
-    temp_path = path.with_suffix(".tmp")
+def save_json(
+    path,
+    data
+):
 
-    with open(temp_path, "w", encoding="utf-8") as f:
+    path.parent.mkdir(
+        parents=True,
+        exist_ok=True
+    )
+
+    temp_path = path.with_suffix(
+        ".tmp"
+    )
+
+    with open(
+        temp_path,
+        "w",
+        encoding="utf-8"
+    ) as file:
+
         json.dump(
             data,
-            f,
+            file,
             indent=2,
             ensure_ascii=False
         )
@@ -298,18 +301,32 @@ def save_json(path, data):
 # ============================================================
 
 def load_users():
-    return load_json(USERS_FILE, {})
+    return load_json(
+        USERS_FILE,
+        {}
+    )
 
 
 def save_users(users):
-    save_json(USERS_FILE, users)
+    save_json(
+        USERS_FILE,
+        users
+    )
 
 
-def create_user(username, password):
+def create_user(
+    username,
+    password
+):
+
     users = load_users()
 
     if username in users:
-        return False, "Username already exists."
+
+        return (
+            False,
+            "Username already exists."
+        )
 
     users[username] = {
         "password": password,
@@ -318,40 +335,59 @@ def create_user(username, password):
 
     save_users(users)
 
-    return True, "Account created successfully."
+    return (
+        True,
+        "Account created successfully."
+    )
 
 
-def login_user(username, password):
+def login_user(
+    username,
+    password
+):
+
     users = load_users()
 
     if username not in users:
         return False
 
-    if users[username]["password"] != password:
-        return False
-
-    return True
+    return (
+        users[username].get("password")
+        == password
+    )
 
 
 # ============================================================
-# CHAT STORAGE
+# CHAT DATABASE
 # ============================================================
 
 def load_chats():
-    return load_json(CHATS_FILE, {})
+
+    return load_json(
+        CHATS_FILE,
+        {}
+    )
 
 
 def save_chats(chats):
-    save_json(CHATS_FILE, chats)
+
+    save_json(
+        CHATS_FILE,
+        chats
+    )
 
 
-def create_chat(username, title="New Chat"):
+def create_chat(
+    username,
+    title="New Chat"
+):
+
     chats = load_chats()
-
-    chat_id = uuid.uuid4().hex
 
     if username not in chats:
         chats[username] = {}
+
+    chat_id = uuid.uuid4().hex
 
     chats[username][chat_id] = {
         "id": chat_id,
@@ -361,31 +397,49 @@ def create_chat(username, title="New Chat"):
         "messages": [],
         "documents": [],
         "images": [],
+        "image_hashes": [],
         "website_urls": []
     }
 
     save_chats(chats)
 
-    get_chat_folder(username, chat_id).mkdir(
-        parents=True,
-        exist_ok=True
+    get_documents_folder(
+        username,
+        chat_id
     )
 
-    get_documents_folder(username, chat_id)
-    get_images_folder(username, chat_id)
+    get_images_folder(
+        username,
+        chat_id
+    )
+
+    save_knowledge_manifest(
+        username,
+        chat_id,
+        {
+            "documents": [],
+            "websites": []
+        }
+    )
 
     return chat_id
 
 
 def get_user_chats(username):
+
     chats = load_chats()
 
-    user_chats = chats.get(username, {})
+    return chats.get(
+        username,
+        {}
+    )
 
-    return user_chats
 
+def get_chat(
+    username,
+    chat_id
+):
 
-def get_chat(username, chat_id):
     chats = load_chats()
 
     return (
@@ -395,38 +449,66 @@ def get_chat(username, chat_id):
     )
 
 
-def update_chat(username, chat_id, chat_data):
+def update_chat(
+    username,
+    chat_id,
+    chat
+):
+
     chats = load_chats()
 
     if username not in chats:
         chats[username] = {}
 
-    chats[username][chat_id] = chat_data
+    chats[username][chat_id] = chat
 
     save_chats(chats)
 
 
-def delete_chat(username, chat_id):
+def delete_chat(
+    username,
+    chat_id
+):
+
     chats = load_chats()
 
     if username in chats:
-        chats[username].pop(chat_id, None)
+
+        chats[username].pop(
+            chat_id,
+            None
+        )
 
     save_chats(chats)
 
-    folder = get_chat_folder(username, chat_id)
+    folder = get_chat_folder(
+        username,
+        chat_id
+    )
 
     if folder.exists():
-        shutil.rmtree(folder, ignore_errors=True)
+
+        shutil.rmtree(
+            folder,
+            ignore_errors=True
+        )
 
 
-def rename_chat(username, chat_id, new_title):
-    chat = get_chat(username, chat_id)
+def rename_chat(
+    username,
+    chat_id,
+    title
+):
+
+    chat = get_chat(
+        username,
+        chat_id
+    )
 
     if not chat:
         return
 
-    chat["title"] = new_title.strip()[:80]
+    chat["title"] = title.strip()[:80]
     chat["updated_at"] = now_iso()
 
     update_chat(
@@ -441,23 +523,24 @@ def rename_chat(username, chat_id, new_title):
 # ============================================================
 
 def generate_chat_title(question):
-    question = question.strip()
+
+    question = re.sub(
+        r"\s+",
+        " ",
+        question.strip()
+    )
 
     if not question:
         return "New Chat"
 
-    clean = re.sub(
-        r"\s+",
-        " ",
-        question
-    )
+    if len(question) > 45:
 
-    clean = clean.replace("\n", " ")
+        return (
+            question[:45].rstrip()
+            + "..."
+        )
 
-    if len(clean) > 45:
-        clean = clean[:45].rstrip() + "..."
-
-    return clean
+    return question
 
 
 # ============================================================
@@ -465,18 +548,32 @@ def generate_chat_title(question):
 # ============================================================
 
 def parse_datetime(value):
+
     try:
-        return datetime.fromisoformat(value)
+        return datetime.fromisoformat(
+            value
+        )
+
     except Exception:
+
         return datetime.now()
 
 
-def group_chats_by_date(chats):
-    now = datetime.now()
+def group_chats_by_date(
+    chats
+):
 
-    today = now.date()
-    yesterday = today - timedelta(days=1)
-    seven_days_ago = today - timedelta(days=7)
+    today = datetime.now().date()
+
+    yesterday = (
+        today
+        - timedelta(days=1)
+    )
+
+    seven_days_ago = (
+        today
+        - timedelta(days=7)
+    )
 
     groups = {
         "Today": [],
@@ -486,28 +583,45 @@ def group_chats_by_date(chats):
     }
 
     for chat in chats:
+
         dt = parse_datetime(
             chat.get(
                 "updated_at",
-                chat.get("created_at", now_iso())
+                chat.get(
+                    "created_at",
+                    now_iso()
+                )
             )
         )
 
-        date_value = dt.date()
+        chat_date = dt.date()
 
-        if date_value == today:
-            groups["Today"].append(chat)
+        if chat_date == today:
 
-        elif date_value == yesterday:
-            groups["Yesterday"].append(chat)
+            groups["Today"].append(
+                chat
+            )
 
-        elif date_value >= seven_days_ago:
-            groups["Previous 7 days"].append(chat)
+        elif chat_date == yesterday:
+
+            groups["Yesterday"].append(
+                chat
+            )
+
+        elif chat_date >= seven_days_ago:
+
+            groups["Previous 7 days"].append(
+                chat
+            )
 
         else:
-            groups["Older"].append(chat)
+
+            groups["Older"].append(
+                chat
+            )
 
     for group in groups:
+
         groups[group].sort(
             key=lambda x: x.get(
                 "updated_at",
@@ -540,20 +654,27 @@ def split_text(
     chunks = []
 
     start = 0
-    text_length = len(text)
 
-    while start < text_length:
+    while start < len(text):
 
         end = start + chunk_size
 
-        chunk = text[start:end]
+        chunk = text[
+            start:end
+        ]
 
         if chunk.strip():
-            chunks.append(chunk.strip())
 
-        next_start = end - overlap
+            chunks.append(
+                chunk.strip()
+            )
+
+        next_start = (
+            end - overlap
+        )
 
         if next_start <= start:
+
             next_start = end
 
         start = next_start
@@ -565,11 +686,15 @@ def split_text(
 # DOCUMENT EXTRACTION
 # ============================================================
 
-def extract_pdf(file_path):
+def extract_pdf(
+    file_path
+):
 
-    text_parts = []
+    result = []
 
-    reader = PdfReader(str(file_path))
+    reader = PdfReader(
+        str(file_path)
+    )
 
     for page_number, page in enumerate(
         reader.pages,
@@ -577,82 +702,113 @@ def extract_pdf(file_path):
     ):
 
         try:
-            page_text = page.extract_text() or ""
 
-            if page_text.strip():
-                text_parts.append(
-                    f"[Page {page_number}]\n{page_text}"
+            text = (
+                page.extract_text()
+                or ""
+            )
+
+            if text.strip():
+
+                result.append(
+                    f"[Page {page_number}]\n{text}"
                 )
 
         except Exception:
             continue
 
-    return "\n\n".join(text_parts)
+    return "\n\n".join(result)
 
 
-def extract_docx(file_path):
+def extract_docx(
+    file_path
+):
 
-    document = Document(str(file_path))
+    document = Document(
+        str(file_path)
+    )
 
-    parts = []
+    result = []
 
     for paragraph in document.paragraphs:
 
         text = paragraph.text.strip()
 
         if text:
-            parts.append(text)
 
-    return "\n".join(parts)
+            result.append(text)
+
+    return "\n".join(result)
 
 
-def extract_xlsx(file_path):
+def extract_xlsx(
+    file_path
+):
 
-    parts = []
+    result = []
 
-    excel_file = pd.ExcelFile(file_path)
+    excel_file = pd.ExcelFile(
+        file_path
+    )
 
-    for sheet_name in excel_file.sheet_names:
+    for sheet in excel_file.sheet_names:
 
         df = pd.read_excel(
             file_path,
-            sheet_name=sheet_name
+            sheet_name=sheet
         )
 
-        parts.append(
-            f"Sheet: {sheet_name}\n"
-            + df.to_string(index=False)
+        result.append(
+            f"Sheet: {sheet}\n"
+            + df.to_string(
+                index=False
+            )
         )
 
-    return "\n\n".join(parts)
+    return "\n\n".join(result)
 
 
-def extract_txt(file_path):
+def extract_txt(
+    file_path
+):
 
     with open(
         file_path,
         "r",
         encoding="utf-8",
         errors="ignore"
-    ) as f:
+    ) as file:
 
-        return f.read()
+        return file.read()
 
 
-def extract_document(file_path):
+def extract_document(
+    file_path
+):
 
-    suffix = Path(file_path).suffix.lower()
+    extension = (
+        Path(file_path)
+        .suffix
+        .lower()
+    )
 
-    if suffix == ".pdf":
+    if extension == ".pdf":
         return extract_pdf(file_path)
 
-    if suffix == ".docx":
+    if extension == ".docx":
         return extract_docx(file_path)
 
-    if suffix in [".xlsx", ".xls"]:
+    if extension in [
+        ".xlsx",
+        ".xls"
+    ]:
         return extract_xlsx(file_path)
 
-    if suffix in [".txt", ".md", ".csv"]:
+    if extension in [
+        ".txt",
+        ".md",
+        ".csv"
+    ]:
         return extract_txt(file_path)
 
     return ""
@@ -664,66 +820,48 @@ def extract_document(file_path):
 
 def extract_website(url):
 
-    try:
-
-        response = requests.get(
-            url,
-            timeout=15,
-            headers={
-                "User-Agent":
-                "Mozilla/5.0"
-            }
-        )
-
-        response.raise_for_status()
-
-        html = response.text
-
-        # Remove scripts and styles
-        html = re.sub(
-            r"<script.*?</script>",
-            " ",
-            html,
-            flags=re.DOTALL | re.IGNORECASE
-        )
-
-        html = re.sub(
-            r"<style.*?</style>",
-            " ",
-            html,
-            flags=re.DOTALL | re.IGNORECASE
-        )
-
-        text = re.sub(
-            r"<[^>]+>",
-            " ",
-            html
-        )
-
-        text = re.sub(
-            r"\s+",
-            " ",
-            text
-        )
-
-        return text.strip()
-
-    except Exception as e:
-        raise Exception(
-            f"Could not load website: {e}"
-        )
-
-
-# ============================================================
-# EMBEDDINGS
-# ============================================================
-
-@st.cache_resource
-def get_embeddings():
-
-    return HuggingFaceEmbeddings(
-        model_name="sentence-transformers/all-MiniLM-L6-v2"
+    response = requests.get(
+        url,
+        timeout=15,
+        headers={
+            "User-Agent":
+            "Mozilla/5.0"
+        }
     )
+
+    response.raise_for_status()
+
+    html = response.text
+
+    html = re.sub(
+        r"<script.*?</script>",
+        " ",
+        html,
+        flags=re.DOTALL |
+        re.IGNORECASE
+    )
+
+    html = re.sub(
+        r"<style.*?</style>",
+        " ",
+        html,
+        flags=re.DOTALL |
+        re.IGNORECASE
+    )
+
+    text = re.sub(
+        r"<[^>]+>",
+        " ",
+        html
+    )
+
+    text = re.sub(
+        r"\s+",
+        " ",
+        text
+    )
+
+    return text.strip()
 
 
 # ============================================================
@@ -735,13 +873,11 @@ def load_knowledge_manifest(
     chat_id
 ):
 
-    knowledge_file = get_knowledge_file(
-        username,
-        chat_id
-    )
-
     return load_json(
-        knowledge_file,
+        get_knowledge_file(
+            username,
+            chat_id
+        ),
         {
             "documents": [],
             "websites": []
@@ -755,19 +891,30 @@ def save_knowledge_manifest(
     manifest
 ):
 
-    knowledge_file = get_knowledge_file(
-        username,
-        chat_id
-    )
-
     save_json(
-        knowledge_file,
+        get_knowledge_file(
+            username,
+            chat_id
+        ),
         manifest
     )
 
 
 # ============================================================
-# BUILD CHAT VECTORSTORE
+# EMBEDDINGS
+# ============================================================
+
+@st.cache_resource
+def get_embeddings():
+
+    return HuggingFaceEmbeddings(
+        model_name=
+        "sentence-transformers/all-MiniLM-L6-v2"
+    )
+
+
+# ============================================================
+# BUILD CURRENT CHAT VECTORSTORE
 # ============================================================
 
 def build_chat_vectorstore(
@@ -780,11 +927,12 @@ def build_chat_vectorstore(
         chat_id
     )
 
-    documents = []
+    records = []
 
-    # ------------------------------
+
+    # --------------------------------------------------------
     # DOCUMENTS
-    # ------------------------------
+    # --------------------------------------------------------
 
     for item in manifest.get(
         "documents",
@@ -792,7 +940,10 @@ def build_chat_vectorstore(
     ):
 
         path = Path(
-            item.get("path", "")
+            item.get(
+                "path",
+                ""
+            )
         )
 
         if not path.exists():
@@ -800,16 +951,22 @@ def build_chat_vectorstore(
 
         try:
 
-            text = extract_document(path)
+            text = extract_document(
+                path
+            )
 
             if not text.strip():
                 continue
 
-            chunks = split_text(text)
+            chunks = split_text(
+                text
+            )
 
-            for index, chunk in enumerate(chunks):
+            for index, chunk in enumerate(
+                chunks
+            ):
 
-                documents.append(
+                records.append(
                     {
                         "text": chunk,
                         "source": item.get(
@@ -822,28 +979,36 @@ def build_chat_vectorstore(
                 )
 
         except Exception:
+
             continue
 
 
-    # ------------------------------
+    # --------------------------------------------------------
     # WEBSITES
-    # ------------------------------
+    # --------------------------------------------------------
 
     for item in manifest.get(
         "websites",
         []
     ):
 
-        text = item.get("text", "")
+        text = item.get(
+            "text",
+            ""
+        )
 
         if not text.strip():
             continue
 
-        chunks = split_text(text)
+        chunks = split_text(
+            text
+        )
 
-        for index, chunk in enumerate(chunks):
+        for index, chunk in enumerate(
+            chunks
+        ):
 
-            documents.append(
+            records.append(
                 {
                     "text": chunk,
                     "source": item.get(
@@ -856,21 +1021,13 @@ def build_chat_vectorstore(
             )
 
 
-    # ------------------------------
-    # NOTHING FOUND
-    # ------------------------------
-
-    if not documents:
+    if not records:
         return None
 
 
-    # ------------------------------
-    # CREATE VECTORSTORE
-    # ------------------------------
-
     texts = [
         item["text"]
-        for item in documents
+        for item in records
     ]
 
     metadatas = [
@@ -879,14 +1036,12 @@ def build_chat_vectorstore(
             "type": item["type"],
             "chunk": item["chunk"]
         }
-        for item in documents
+        for item in records
     ]
-
-    embeddings = get_embeddings()
 
     vectorstore = FAISS.from_texts(
         texts=texts,
-        embedding=embeddings,
+        embedding=get_embeddings(),
         metadatas=metadatas
     )
 
@@ -908,49 +1063,55 @@ def load_current_chat_knowledge():
     )
 
     if not username or not chat_id:
+
+        st.session_state.active_vectorstore = None
+
         return
 
     try:
 
-        vectorstore = build_chat_vectorstore(
-            username,
-            chat_id
-        )
-
         st.session_state.active_vectorstore = (
-            vectorstore
-        )
-
-    except Exception as e:
-
-        st.session_state.active_vectorstore = None
-
-        st.warning(
-            f"Could not build document knowledge: {e}"
-        )
-
-
-# ============================================================
-# SEARCH CURRENT CHAT DOCUMENTS
-# ============================================================
-
-def get_document_context(question):
-
-    vectorstore = st.session_state.get(
-        "active_vectorstore"
-    )
-
-    if vectorstore is None:
-        return "", []
-
-    try:
-
-        results = vectorstore.similarity_search(
-            question,
-            k=RETRIEVER_K
+            build_chat_vectorstore(
+                username,
+                chat_id
+            )
         )
 
     except Exception:
+
+        st.session_state.active_vectorstore = None
+
+
+# ============================================================
+# SEARCH CURRENT CHAT ONLY
+# ============================================================
+
+def get_document_context(
+    question
+):
+
+    vectorstore = (
+        st.session_state.get(
+            "active_vectorstore"
+        )
+    )
+
+    if vectorstore is None:
+
+        return "", []
+
+
+    try:
+
+        results = (
+            vectorstore.similarity_search(
+                question,
+                k=RETRIEVER_K
+            )
+        )
+
+    except Exception:
+
         return "", []
 
 
@@ -961,7 +1122,10 @@ def get_document_context(question):
 
         text = result.page_content
 
-        metadata = result.metadata or {}
+        metadata = (
+            result.metadata
+            or {}
+        )
 
         source = metadata.get(
             "source",
@@ -973,40 +1137,49 @@ def get_document_context(question):
         )
 
         if source not in sources:
-            sources.append(source)
 
-    context = "\n\n---\n\n".join(
-        context_parts
+            sources.append(
+                source
+            )
+
+    return (
+        "\n\n---\n\n".join(
+            context_parts
+        ),
+        sources
     )
-
-    return context, sources
 
 
 # ============================================================
-# LOAD CURRENT CHAT IMAGES
+# CURRENT CHAT IMAGES
 # ============================================================
 
 def load_current_chat_images():
 
-    username = st.session_state.get(
-        "username"
+    username = (
+        st.session_state.get(
+            "username"
+        )
     )
 
-    chat_id = st.session_state.get(
-        "chat_id"
+    chat_id = (
+        st.session_state.get(
+            "chat_id"
+        )
     )
 
     if not username or not chat_id:
+
         return []
 
-    images_folder = get_images_folder(
+    folder = get_images_folder(
         username,
         chat_id
     )
 
-    image_files = []
+    result = []
 
-    for path in images_folder.iterdir():
+    for path in folder.iterdir():
 
         if path.suffix.lower() in [
             ".png",
@@ -1015,9 +1188,9 @@ def load_current_chat_images():
             ".webp"
         ]:
 
-            image_files.append(path)
+            result.append(path)
 
-    return image_files
+    return result
 
 
 # ============================================================
@@ -1028,10 +1201,14 @@ def get_gemini_client():
 
     api_key = st.secrets.get(
         "GEMINI_API_KEY",
-        os.getenv("GEMINI_API_KEY", "")
+        os.getenv(
+            "GEMINI_API_KEY",
+            ""
+        )
     )
 
     if not api_key:
+
         return None
 
     return genai.Client(
@@ -1040,7 +1217,7 @@ def get_gemini_client():
 
 
 # ============================================================
-# GENERATE GEMINI RESPONSE
+# GEMINI RESPONSE
 # ============================================================
 
 def generate_ai_response(
@@ -1057,46 +1234,34 @@ def generate_ai_response(
 
         return (
             "⚠️ Gemini API key is not configured.\n\n"
-            "Add `GEMINI_API_KEY` to your Streamlit Secrets."
+            "Please add GEMINI_API_KEY to "
+            "Streamlit Secrets."
         )
 
-
-    # ========================================================
-    # SYSTEM INSTRUCTIONS
-    # ========================================================
 
     system_instruction = """
 You are the AI assistant inside an AI Document Intelligence application.
 
-IMPORTANT CHAT ISOLATION RULES:
+IMPORTANT:
 
-1. Every conversation is completely separate.
-2. You may use ONLY the document context supplied for the CURRENT conversation.
-3. NEVER assume that a document from another conversation is available.
-4. NEVER mix information from different conversations.
-5. If the user asks about the current conversation's documents,
-   answer using the supplied document context.
-6. If the answer cannot be found in the supplied current-chat
-   documents, clearly say:
-   "I couldn't find that information in the documents uploaded
-   to this chat."
-7. Multiple documents inside the CURRENT conversation may be
-   compared with each other.
-8. Website information supplied in the current conversation
-   belongs only to this conversation.
-9. Images supplied in the current conversation belong only to
-   this conversation.
-10. If the question is general knowledge and does not require
-    uploaded documents, answer normally.
-11. Do not invent information from documents.
-12. Be clear, direct and helpful.
-13. Use simple language unless the user asks for technical detail.
+1. Every chat is completely separate.
+2. Use ONLY information supplied for the CURRENT chat.
+3. NEVER use documents from another chat.
+4. NEVER mix knowledge between chats.
+5. Multiple documents in the CURRENT chat can be compared.
+6. Current-chat images can be analyzed.
+7. Current-chat website information can be used.
+8. If the answer is not available in the current chat's documents,
+   say:
+
+   "I couldn't find that information in the documents uploaded to this chat."
+
+9. Do not invent information from documents.
+10. General questions can be answered normally.
+11. Keep answers clear and direct.
+12. Use simple language unless technical detail is requested.
 """
 
-
-    # ========================================================
-    # BUILD HISTORY
-    # ========================================================
 
     history_text = ""
 
@@ -1113,19 +1278,17 @@ IMPORTANT CHAT ISOLATION RULES:
         )
 
         if role == "user":
+
             history_text += (
                 f"User: {content}\n"
             )
 
         elif role == "assistant":
+
             history_text += (
                 f"Assistant: {content}\n"
             )
 
-
-    # ========================================================
-    # DOCUMENT CONTEXT
-    # ========================================================
 
     if document_context.strip():
 
@@ -1146,16 +1309,12 @@ No relevant document context was found.
 """
 
 
-    # ========================================================
-    # SOURCES
-    # ========================================================
-
-    source_text = ""
+    source_section = ""
 
     if sources:
 
-        source_text = (
-            "\nRelevant sources in this chat:\n"
+        source_section = (
+            "\nSources from current chat:\n"
             + "\n".join(
                 f"- {source}"
                 for source in sources
@@ -1163,37 +1322,29 @@ No relevant document context was found.
         )
 
 
-    # ========================================================
-    # FINAL PROMPT
-    # ========================================================
-
     prompt = f"""
-{system_instruction}
-
 {document_section}
 
-{source_text}
+{source_section}
 
-PREVIOUS CONVERSATION:
+PREVIOUS CHAT HISTORY:
+
 {history_text}
 
 CURRENT USER QUESTION:
+
 {question}
 
-Answer the current user question.
+Answer the user's current question.
 """
 
-
-    # ========================================================
-    # CONTENTS
-    # ========================================================
 
     contents = [prompt]
 
 
-    # ========================================================
-    # ADD CURRENT CHAT IMAGES ONLY
-    # ========================================================
+    # --------------------------------------------------------
+    # CURRENT CHAT IMAGES ONLY
+    # --------------------------------------------------------
 
     for image_path in image_paths:
 
@@ -1203,50 +1354,53 @@ Answer the current user question.
                 image_path
             )
 
-            contents.append(image)
+            contents.append(
+                image
+            )
 
         except Exception:
+
             continue
 
 
-    # ========================================================
-    # GEMINI REQUEST
-    # ========================================================
-
     try:
 
-        response = client.models.generate_content(
-            model=GEMINI_MODEL,
-            contents=contents,
-            config=types.GenerateContentConfig(
-                system_instruction=system_instruction,
-                temperature=0.2,
-                max_output_tokens=MAX_OUTPUT_TOKENS
+        response = (
+            client.models.generate_content(
+                model=GEMINI_MODEL,
+                contents=contents,
+                config=types.GenerateContentConfig(
+                    system_instruction=
+                    system_instruction,
+                    temperature=0.2,
+                    max_output_tokens=
+                    MAX_OUTPUT_TOKENS
+                )
             )
         )
 
         answer = response.text
 
         if not answer:
-            return "I couldn't generate a response."
+
+            return (
+                "I couldn't generate a response."
+            )
 
         return answer.strip()
 
-    except Exception as e:
-
-        error_text = str(e)
+    except Exception as error:
 
         return (
             "⚠️ Gemini error:\n\n"
-            f"{error_text}\n\n"
-            "If this says the model is unavailable, "
-            "change GEMINI_MODEL in Streamlit Secrets "
-            "to a model available to your Gemini API key."
+            f"{error}\n\n"
+            "If the error says the model is unavailable, "
+            "check GEMINI_MODEL in Streamlit Secrets."
         )
 
 
 # ============================================================
-# SAVE CHAT MESSAGE
+# SAVE MESSAGE
 # ============================================================
 
 def save_message(
@@ -1264,7 +1418,10 @@ def save_message(
     if not chat:
         return
 
-    chat["messages"].append(
+    chat.setdefault(
+        "messages",
+        []
+    ).append(
         {
             "role": role,
             "content": content,
@@ -1287,14 +1444,20 @@ def save_message(
 
 def login_page():
 
-    st.markdown(
+    st.html(
         """
         <div style="
             max-width:520px;
-            margin:80px auto 0 auto;
+            margin:70px auto 20px auto;
             text-align:center;
         ">
-            <div style="font-size:55px;">🤖</div>
+
+            <div style="
+                font-size:55px;
+            ">
+                🤖
+            </div>
+
             <div style="
                 font-size:32px;
                 font-weight:700;
@@ -1302,21 +1465,24 @@ def login_page():
             ">
                 AI Document Intelligence
             </div>
+
             <div style="
                 color:#999;
                 margin-top:8px;
             ">
                 Chat with your documents using AI
             </div>
+
         </div>
-        """,
-        unsafe_allow_html=True
+        """
     )
 
-    st.write("")
 
     login_tab, signup_tab = st.tabs(
-        ["🔐 Login", "➕ Create Account"]
+        [
+            "🔐 Login",
+            "➕ Create Account"
+        ]
     )
 
 
@@ -1348,16 +1514,19 @@ def login_page():
             ):
 
                 st.session_state.logged_in = True
-                st.session_state.username = username
 
-                user_chats = get_user_chats(
+                st.session_state.username = (
                     username
                 )
 
-                if user_chats:
+                chats = get_user_chats(
+                    username
+                )
+
+                if chats:
 
                     sorted_chats = sorted(
-                        user_chats.values(),
+                        chats.values(),
                         key=lambda x: x.get(
                             "updated_at",
                             ""
@@ -1371,8 +1540,10 @@ def login_page():
 
                 else:
 
-                    st.session_state.chat_id = create_chat(
-                        username
+                    st.session_state.chat_id = (
+                        create_chat(
+                            username
+                        )
                     )
 
                 load_current_chat_knowledge()
@@ -1387,7 +1558,7 @@ def login_page():
 
 
     # ========================================================
-    # SIGNUP
+    # SIGN UP
     # ========================================================
 
     with signup_tab:
@@ -1446,10 +1617,14 @@ def login_page():
                     )
 
                     st.session_state.logged_in = True
+
                     st.session_state.username = (
                         new_username.strip()
                     )
-                    st.session_state.chat_id = chat_id
+
+                    st.session_state.chat_id = (
+                        chat_id
+                    )
 
                     load_current_chat_knowledge()
 
@@ -1463,27 +1638,36 @@ def login_page():
 
 
 # ============================================================
-# INITIALIZE SESSION STATE
+# SESSION STATE
 # ============================================================
 
 if "logged_in" not in st.session_state:
+
     st.session_state.logged_in = False
 
+
 if "username" not in st.session_state:
+
     st.session_state.username = None
 
+
 if "chat_id" not in st.session_state:
+
     st.session_state.chat_id = None
 
+
 if "active_vectorstore" not in st.session_state:
+
     st.session_state.active_vectorstore = None
 
+
 if "upload_version" not in st.session_state:
+
     st.session_state.upload_version = 0
 
 
 # ============================================================
-# SHOW LOGIN
+# LOGIN CHECK
 # ============================================================
 
 if not st.session_state.logged_in:
@@ -1494,37 +1678,36 @@ if not st.session_state.logged_in:
 
 
 # ============================================================
-# CURRENT USER
+# USER
 # ============================================================
 
 username = st.session_state.username
 
 
 # ============================================================
-# MAKE SURE USER HAS A CHAT
+# CREATE CHAT IF NEEDED
 # ============================================================
 
-user_chats = get_user_chats(username)
+user_chats = get_user_chats(
+    username
+)
 
 if not user_chats:
 
-    new_chat_id = create_chat(
-        username
+    st.session_state.chat_id = (
+        create_chat(
+            username
+        )
     )
-
-    st.session_state.chat_id = new_chat_id
 
     load_current_chat_knowledge()
 
     st.rerun()
 
 
-# ============================================================
-# MAKE SURE CURRENT CHAT EXISTS
-# ============================================================
-
 if (
-    st.session_state.chat_id not in user_chats
+    st.session_state.chat_id
+    not in user_chats
 ):
 
     latest_chat = sorted(
@@ -1536,7 +1719,9 @@ if (
         reverse=True
     )[0]
 
-    st.session_state.chat_id = latest_chat["id"]
+    st.session_state.chat_id = (
+        latest_chat["id"]
+    )
 
     load_current_chat_knowledge()
 
@@ -1552,10 +1737,10 @@ current_chat = get_chat(
     st.session_state.chat_id
 )
 
-if current_chat is None:
+if not current_chat:
 
     st.error(
-        "Current chat could not be loaded."
+        "Could not load the current chat."
     )
 
     st.stop()
@@ -1567,7 +1752,7 @@ if current_chat is None:
 
 with st.sidebar:
 
-    st.markdown(
+    st.html(
         """
         <div style="
             font-size:22px;
@@ -1576,8 +1761,7 @@ with st.sidebar:
         ">
             🤖 AI Document Intelligence
         </div>
-        """,
-        unsafe_allow_html=True
+        """
     )
 
 
@@ -1594,9 +1778,13 @@ with st.sidebar:
             username
         )
 
-        st.session_state.chat_id = new_chat_id
+        st.session_state.chat_id = (
+            new_chat_id
+        )
 
-        st.session_state.active_vectorstore = None
+        st.session_state.active_vectorstore = (
+            None
+        )
 
         st.session_state.upload_version += 1
 
@@ -1604,8 +1792,7 @@ with st.sidebar:
 
 
     st.markdown(
-        '<div class="divider"></div>',
-        unsafe_allow_html=True
+        "---"
     )
 
 
@@ -1618,25 +1805,26 @@ with st.sidebar:
     )
 
     all_chats = list(
-        get_user_chats(username).values()
+        get_user_chats(
+            username
+        ).values()
     )
 
-    grouped_chats = group_chats_by_date(
+    groups = group_chats_by_date(
         all_chats
     )
 
 
-    for group_name, chats_in_group in grouped_chats.items():
+    for group_name, chats in groups.items():
 
-        if not chats_in_group:
+        if not chats:
             continue
 
-        st.markdown(
-            f'<div class="recent-heading">{group_name}</div>',
-            unsafe_allow_html=True
+        st.caption(
+            group_name.upper()
         )
 
-        for chat in chats_in_group:
+        for chat in chats:
 
             chat_id = chat["id"]
 
@@ -1646,26 +1834,43 @@ with st.sidebar:
             )
 
             if len(title) > 35:
-                title = title[:35] + "..."
 
-            is_current = (
-                chat_id ==
-                st.session_state.chat_id
-            )
+                title = (
+                    title[:35]
+                    + "..."
+                )
 
-            button_text = (
-                "🟢  " if is_current else "💬  "
-            ) + title
+            if (
+                chat_id
+                == st.session_state.chat_id
+            ):
+
+                button_text = (
+                    "🟢  "
+                    + title
+                )
+
+            else:
+
+                button_text = (
+                    "💬  "
+                    + title
+                )
+
 
             if st.button(
                 button_text,
-                key=f"open_{chat_id}",
+                key=f"recent_{chat_id}",
                 use_container_width=True
             ):
 
-                st.session_state.chat_id = chat_id
+                st.session_state.chat_id = (
+                    chat_id
+                )
 
-                st.session_state.active_vectorstore = None
+                st.session_state.active_vectorstore = (
+                    None
+                )
 
                 st.session_state.upload_version += 1
 
@@ -1675,13 +1880,12 @@ with st.sidebar:
 
 
     st.markdown(
-        '<div class="divider"></div>',
-        unsafe_allow_html=True
+        "---"
     )
 
 
     # ========================================================
-    # CHAT MANAGEMENT
+    # CHAT SETTINGS
     # ========================================================
 
     with st.expander(
@@ -1694,7 +1898,7 @@ with st.sidebar:
                 "title",
                 "New Chat"
             ),
-            key="rename_chat"
+            key="rename_current_chat"
         )
 
         if st.button(
@@ -1718,22 +1922,24 @@ with st.sidebar:
             use_container_width=True
         ):
 
-            current_id = (
+            deleted_id = (
                 st.session_state.chat_id
             )
 
             delete_chat(
                 username,
-                current_id
+                deleted_id
             )
 
-            remaining = list(
-                get_user_chats(username).values()
+            remaining_chats = list(
+                get_user_chats(
+                    username
+                ).values()
             )
 
-            if remaining:
+            if remaining_chats:
 
-                remaining.sort(
+                remaining_chats.sort(
                     key=lambda x: x.get(
                         "updated_at",
                         ""
@@ -1742,26 +1948,26 @@ with st.sidebar:
                 )
 
                 st.session_state.chat_id = (
-                    remaining[0]["id"]
+                    remaining_chats[0]["id"]
                 )
 
             else:
 
-                st.session_state.chat_id = create_chat(
-                    username
+                st.session_state.chat_id = (
+                    create_chat(
+                        username
+                    )
                 )
 
-            st.session_state.active_vectorstore = None
-
-            st.session_state.upload_version += 1
-
-            load_current_chat_knowledge()
+            st.session_state.active_vectorstore = (
+                None
+            )
 
             st.rerun()
 
 
     # ========================================================
-    # DOCUMENT UPLOAD
+    # DOCUMENTS
     # ========================================================
 
     st.markdown(
@@ -1769,7 +1975,7 @@ with st.sidebar:
     )
 
     st.caption(
-        "Documents uploaded here belong only to this chat."
+        "Documents belong only to this chat."
     )
 
     uploaded_files = st.file_uploader(
@@ -1785,9 +1991,12 @@ with st.sidebar:
         ],
         accept_multiple_files=True,
         key=(
-            f"documents_"
-            f"{st.session_state.chat_id}_"
-            f"{st.session_state.upload_version}"
+            "documents_"
+            + st.session_state.chat_id
+            + "_"
+            + str(
+                st.session_state.upload_version
+            )
         )
     )
 
@@ -1807,17 +2016,21 @@ with st.sidebar:
             )
         }
 
-        new_document_added = False
+        changed = False
 
 
         for uploaded_file in uploaded_files:
 
             data = uploaded_file.getvalue()
 
-            current_hash = file_hash(data)
+            current_hash = file_hash(
+                data
+            )
 
             if current_hash in existing_hashes:
+
                 continue
+
 
             filename = safe_filename(
                 uploaded_file.name
@@ -1831,24 +2044,26 @@ with st.sidebar:
                 / filename
             )
 
-            # Avoid same filename conflict
-            if save_path.exists():
 
-                stem = save_path.stem
-                suffix = save_path.suffix
+            if save_path.exists():
 
                 save_path = (
                     save_path.parent
-                    / f"{stem}_{current_hash[:8]}{suffix}"
+                    / (
+                        save_path.stem
+                        + "_"
+                        + current_hash[:8]
+                        + save_path.suffix
+                    )
                 )
 
 
             with open(
                 save_path,
                 "wb"
-            ) as f:
+            ) as file:
 
-                f.write(data)
+                file.write(data)
 
 
             manifest.setdefault(
@@ -1863,9 +2078,6 @@ with st.sidebar:
                 }
             )
 
-            existing_hashes.add(
-                current_hash
-            )
 
             current_chat.setdefault(
                 "documents",
@@ -1874,10 +2086,15 @@ with st.sidebar:
                 save_path.name
             )
 
-            new_document_added = True
+
+            existing_hashes.add(
+                current_hash
+            )
+
+            changed = True
 
 
-        if new_document_added:
+        if changed:
 
             save_knowledge_manifest(
                 username,
@@ -1903,7 +2120,7 @@ with st.sidebar:
 
 
     # ========================================================
-    # SHOW DOCUMENTS
+    # DOCUMENT LIST
     # ========================================================
 
     manifest = load_knowledge_manifest(
@@ -1919,18 +2136,17 @@ with st.sidebar:
     if documents:
 
         st.caption(
-            f"{len(documents)} document(s) in this chat"
+            f"{len(documents)} document(s)"
         )
 
-        for item in documents:
+        for document in documents:
 
-            st.markdown(
-                f"""
-                <div class="file-item">
-                    📄 {item.get("name", "Document")}
-                </div>
-                """,
-                unsafe_allow_html=True
+            st.write(
+                "📄 "
+                + document.get(
+                    "name",
+                    "Document"
+                )
             )
 
 
@@ -1952,9 +2168,12 @@ with st.sidebar:
         ],
         accept_multiple_files=True,
         key=(
-            f"images_"
-            f"{st.session_state.chat_id}_"
-            f"{st.session_state.upload_version}"
+            "images_"
+            + st.session_state.chat_id
+            + "_"
+            + str(
+                st.session_state.upload_version
+            )
         )
     )
 
@@ -1966,24 +2185,28 @@ with st.sidebar:
             st.session_state.chat_id
         )
 
-        existing_image_hashes = set(
+        existing_hashes = set(
             current_chat.get(
                 "image_hashes",
                 []
             )
         )
 
-        new_image_added = False
+        changed = False
 
 
         for uploaded_image in uploaded_images:
 
             data = uploaded_image.getvalue()
 
-            current_hash = file_hash(data)
+            current_hash = file_hash(
+                data
+            )
 
-            if current_hash in existing_image_hashes:
+            if current_hash in existing_hashes:
+
                 continue
+
 
             filename = safe_filename(
                 uploaded_image.name
@@ -2000,21 +2223,23 @@ with st.sidebar:
 
             if save_path.exists():
 
-                stem = save_path.stem
-                suffix = save_path.suffix
-
                 save_path = (
                     save_path.parent
-                    / f"{stem}_{current_hash[:8]}{suffix}"
+                    / (
+                        save_path.stem
+                        + "_"
+                        + current_hash[:8]
+                        + save_path.suffix
+                    )
                 )
 
 
             with open(
                 save_path,
                 "wb"
-            ) as f:
+            ) as file:
 
-                f.write(data)
+                file.write(data)
 
 
             current_chat.setdefault(
@@ -2031,14 +2256,14 @@ with st.sidebar:
                 current_hash
             )
 
-            existing_image_hashes.add(
+            existing_hashes.add(
                 current_hash
             )
 
-            new_image_added = True
+            changed = True
 
 
-        if new_image_added:
+        if changed:
 
             current_chat["updated_at"] = now_iso()
 
@@ -2056,7 +2281,7 @@ with st.sidebar:
 
 
     # ========================================================
-    # SHOW IMAGES
+    # IMAGE LIST
     # ========================================================
 
     image_files = load_current_chat_images()
@@ -2064,18 +2289,14 @@ with st.sidebar:
     if image_files:
 
         st.caption(
-            f"{len(image_files)} image(s) in this chat"
+            f"{len(image_files)} image(s)"
         )
 
         for image_file in image_files:
 
-            st.markdown(
-                f"""
-                <div class="file-item">
-                    🖼️ {image_file.name}
-                </div>
-                """,
-                unsafe_allow_html=True
+            st.write(
+                "🖼️ "
+                + image_file.name
             )
 
 
@@ -2088,10 +2309,14 @@ with st.sidebar:
     )
 
     website_url = st.text_input(
-        "Add website URL",
+        "Website URL",
         placeholder="https://example.com",
-        key=f"website_{st.session_state.chat_id}"
+        key=(
+            "website_"
+            + st.session_state.chat_id
+        )
     )
+
 
     if st.button(
         "Load Website",
@@ -2107,13 +2332,19 @@ with st.sidebar:
         else:
 
             if not (
-                website_url.startswith("http://")
-                or website_url.startswith("https://")
+                website_url.startswith(
+                    "http://"
+                )
+                or website_url.startswith(
+                    "https://"
+                )
             ):
 
                 website_url = (
-                    "https://" + website_url
+                    "https://"
+                    + website_url
                 )
+
 
             try:
 
@@ -2121,9 +2352,11 @@ with st.sidebar:
                     website_url
                 )
 
-                manifest = load_knowledge_manifest(
-                    username,
-                    st.session_state.chat_id
+                manifest = (
+                    load_knowledge_manifest(
+                        username,
+                        st.session_state.chat_id
+                    )
                 )
 
                 existing_urls = [
@@ -2134,10 +2367,11 @@ with st.sidebar:
                     )
                 ]
 
+
                 if website_url in existing_urls:
 
                     st.warning(
-                        "This website is already added to this chat."
+                        "This website is already in this chat."
                     )
 
                 else:
@@ -2153,11 +2387,13 @@ with st.sidebar:
                         }
                     )
 
+
                     save_knowledge_manifest(
                         username,
                         st.session_state.chat_id,
                         manifest
                     )
+
 
                     current_chat = get_chat(
                         username,
@@ -2171,7 +2407,9 @@ with st.sidebar:
                         website_url
                     )
 
-                    current_chat["updated_at"] = now_iso()
+                    current_chat["updated_at"] = (
+                        now_iso()
+                    )
 
                     update_chat(
                         username,
@@ -2187,10 +2425,11 @@ with st.sidebar:
 
                     st.rerun()
 
-            except Exception as e:
+
+            except Exception as error:
 
                 st.error(
-                    f"Website error: {e}"
+                    f"Website error: {error}"
                 )
 
 
@@ -2209,22 +2448,29 @@ with st.sidebar:
         )
 
         documents_folder = (
-            chat_folder / "documents"
+            chat_folder
+            / "documents"
         )
 
         images_folder = (
-            chat_folder / "images"
+            chat_folder
+            / "images"
         )
 
+
         if documents_folder.exists():
+
             shutil.rmtree(
                 documents_folder
             )
 
+
         if images_folder.exists():
+
             shutil.rmtree(
                 images_folder
             )
+
 
         get_documents_folder(
             username,
@@ -2236,6 +2482,7 @@ with st.sidebar:
             st.session_state.chat_id
         )
 
+
         save_knowledge_manifest(
             username,
             st.session_state.chat_id,
@@ -2244,6 +2491,7 @@ with st.sidebar:
                 "websites": []
             }
         )
+
 
         current_chat = get_chat(
             username,
@@ -2261,6 +2509,7 @@ with st.sidebar:
             current_chat
         )
 
+
         st.session_state.active_vectorstore = None
 
         st.success(
@@ -2271,8 +2520,7 @@ with st.sidebar:
 
 
     st.markdown(
-        '<div class="divider"></div>',
-        unsafe_allow_html=True
+        "---"
     )
 
 
@@ -2294,7 +2542,7 @@ with st.sidebar:
 
 
 # ============================================================
-# MAIN CHAT AREA
+# MAIN CHAT
 # ============================================================
 
 current_chat = get_chat(
@@ -2307,22 +2555,34 @@ current_chat = get_chat(
 # HEADER
 # ============================================================
 
-st.markdown(
+st.html(
     f"""
-    <div class="app-title">
-        🤖 {current_chat.get("title", "New Chat")}
-    </div>
+    <div style="
+        margin-bottom:20px;
+    ">
 
-    <div class="app-subtitle">
-        Ask questions about the documents in this conversation.
+        <div style="
+            font-size:30px;
+            font-weight:700;
+        ">
+            🤖 {current_chat.get("title", "New Chat")}
+        </div>
+
+        <div style="
+            color:#999;
+            font-size:14px;
+            margin-top:5px;
+        ">
+            Ask questions about the documents in this chat.
+        </div>
+
     </div>
-    """,
-    unsafe_allow_html=True
+    """
 )
 
 
 # ============================================================
-# CURRENT CHAT INFORMATION
+# CURRENT CHAT COUNTS
 # ============================================================
 
 document_count = len(
@@ -2346,32 +2606,46 @@ website_count = len(
     )
 )
 
+
 if (
     document_count
     or image_count
     or website_count
 ):
 
-    st.markdown(
+    st.html(
         f"""
-        <div class="info-card">
+        <div style="
+            background:#222;
+            border:1px solid #343434;
+            border-radius:12px;
+            padding:14px;
+            margin-bottom:15px;
+        ">
+
             📄 {document_count} document(s)
             &nbsp;&nbsp;•&nbsp;&nbsp;
+
             🖼️ {image_count} image(s)
             &nbsp;&nbsp;•&nbsp;&nbsp;
+
             🌐 {website_count} website(s)
 
-            <div class="small-muted">
+            <div style="
+                color:#999;
+                font-size:12px;
+                margin-top:5px;
+            ">
                 Only knowledge from this chat is used.
             </div>
+
         </div>
-        """,
-        unsafe_allow_html=True
+        """
     )
 
 
 # ============================================================
-# WELCOME MESSAGE
+# CHAT HISTORY
 # ============================================================
 
 messages = current_chat.get(
@@ -2379,9 +2653,19 @@ messages = current_chat.get(
     []
 )
 
+
+# ============================================================
+# EMPTY CHAT WELCOME SCREEN
+# ============================================================
+
 if not messages:
 
-    st.markdown(
+    # IMPORTANT:
+    # Use st.html() here.
+    # Do NOT use st.write() or normal st.markdown()
+    # for this HTML.
+
+    st.html(
         """
         <div style="
             text-align:center;
@@ -2389,26 +2673,35 @@ if not messages:
             color:#999;
         ">
 
-            <div style="font-size:55px;">
+            <div style="
+                font-size:55px;
+                margin-bottom:10px;
+            ">
                 🤖
             </div>
 
-            <h2 style="color:#f5f5f5;">
+            <div style="
+                color:#f5f5f5;
+                font-size:28px;
+                font-weight:600;
+                margin-bottom:8px;
+            ">
                 How can I help you?
-            </h2>
+            </div>
 
-            <p>
+            <div style="
+                font-size:15px;
+            ">
                 Upload a document and ask questions about it.
-            </p>
+            </div>
 
         </div>
-        """,
-        unsafe_allow_html=True
+        """
     )
 
 
 # ============================================================
-# DISPLAY CHAT HISTORY
+# DISPLAY OLD MESSAGES
 # ============================================================
 
 for message in messages:
@@ -2427,13 +2720,16 @@ for message in messages:
         "user",
         "assistant"
     ]:
+
         continue
+
 
     avatar = (
         "👤"
         if role == "user"
         else "🤖"
     )
+
 
     with st.chat_message(
         role,
@@ -2451,12 +2747,15 @@ for message in messages:
 
 prompt = st.chat_input(
     "Message AI Document Intelligence...",
-    key=f"chat_input_{st.session_state.chat_id}"
+    key=(
+        "chat_input_"
+        + st.session_state.chat_id
+    )
 )
 
 
 # ============================================================
-# HANDLE USER QUESTION
+# PROCESS QUESTION
 # ============================================================
 
 if prompt:
@@ -2467,39 +2766,38 @@ if prompt:
         st.stop()
 
 
-    # ========================================================
+    # --------------------------------------------------------
     # CURRENT CHAT
-    # ========================================================
+    # --------------------------------------------------------
 
     current_chat = get_chat(
         username,
         st.session_state.chat_id
     )
 
-    if current_chat is None:
-        st.error(
-            "Chat could not be found."
-        )
-        st.stop()
 
+    # --------------------------------------------------------
+    # AUTO CHAT TITLE
+    # --------------------------------------------------------
 
-    # ========================================================
-    # AUTO TITLE
-    # ========================================================
-
-    if (
-        current_chat.get("title")
-        in [None, "", "New Chat"]
-    ):
+    if current_chat.get(
+        "title"
+    ) in [
+        None,
+        "",
+        "New Chat"
+    ]:
 
         current_chat["title"] = (
-            generate_chat_title(prompt)
+            generate_chat_title(
+                prompt
+            )
         )
 
 
-    # ========================================================
-    # DISPLAY USER MESSAGE
-    # ========================================================
+    # --------------------------------------------------------
+    # USER MESSAGE
+    # --------------------------------------------------------
 
     with st.chat_message(
         "user",
@@ -2511,10 +2809,6 @@ if prompt:
         )
 
 
-    # ========================================================
-    # SAVE USER MESSAGE
-    # ========================================================
-
     save_message(
         username,
         st.session_state.chat_id,
@@ -2523,9 +2817,9 @@ if prompt:
     )
 
 
-    # ========================================================
-    # GET CURRENT CHAT HISTORY
-    # ========================================================
+    # --------------------------------------------------------
+    # CURRENT CHAT HISTORY
+    # --------------------------------------------------------
 
     current_chat = get_chat(
         username,
@@ -2538,31 +2832,33 @@ if prompt:
     )
 
 
-    # ========================================================
+    # --------------------------------------------------------
     # SEARCH ONLY CURRENT CHAT
-    # ========================================================
+    # --------------------------------------------------------
 
     with st.spinner(
-        "🔎 Searching this chat's knowledge..."
+        "🔎 Searching this chat..."
     ):
 
         document_context, sources = (
-            get_document_context(prompt)
+            get_document_context(
+                prompt
+            )
         )
 
 
-    # ========================================================
+    # --------------------------------------------------------
     # CURRENT CHAT IMAGES
-    # ========================================================
+    # --------------------------------------------------------
 
     image_paths = (
         load_current_chat_images()
     )
 
 
-    # ========================================================
-    # GENERATE AI RESPONSE
-    # ========================================================
+    # --------------------------------------------------------
+    # AI RESPONSE
+    # --------------------------------------------------------
 
     with st.chat_message(
         "assistant",
@@ -2586,9 +2882,9 @@ if prompt:
         )
 
 
-    # ========================================================
-    # SOURCE INFORMATION
-    # ========================================================
+    # --------------------------------------------------------
+    # SOURCES
+    # --------------------------------------------------------
 
     if sources:
 
@@ -2599,13 +2895,14 @@ if prompt:
             for source in sources:
 
                 st.write(
-                    f"• {source}"
+                    "• "
+                    + source
                 )
 
 
-    # ========================================================
-    # SAVE AI RESPONSE
-    # ========================================================
+    # --------------------------------------------------------
+    # SAVE AI MESSAGE
+    # --------------------------------------------------------
 
     save_message(
         username,
@@ -2615,16 +2912,18 @@ if prompt:
     )
 
 
-    # ========================================================
+    # --------------------------------------------------------
     # UPDATE CHAT
-    # ========================================================
+    # --------------------------------------------------------
 
     current_chat = get_chat(
         username,
         st.session_state.chat_id
     )
 
-    current_chat["updated_at"] = now_iso()
+    current_chat["updated_at"] = (
+        now_iso()
+    )
 
     update_chat(
         username,
@@ -2633,8 +2932,8 @@ if prompt:
     )
 
 
-    # ========================================================
-    # RERUN
-    # ========================================================
+    # --------------------------------------------------------
+    # REFRESH
+    # --------------------------------------------------------
 
     st.rerun()
