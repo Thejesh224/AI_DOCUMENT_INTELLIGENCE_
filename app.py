@@ -10,6 +10,7 @@ import json
 import uuid
 import hashlib
 import shutil
+import time
 from pathlib import Path
 from datetime import datetime, timedelta
 
@@ -53,6 +54,16 @@ GEMINI_MODEL = st.secrets.get(
         "gemini-3.8-flash"
     )
 )
+
+# Gemini models used when the primary model is temporarily unavailable.
+# These are stable Gemini Flash models.
+GEMINI_FALLBACK_MODELS = [
+    "gemini-3.6-flash",
+    "gemini-3.5-flash",
+]
+
+GEMINI_RETRY_COUNT = 2
+GEMINI_RETRY_DELAY_SECONDS = 2
 
 MAX_OUTPUT_TOKENS = 4096
 
@@ -1363,40 +1374,84 @@ Answer the user's current question.
             continue
 
 
-    try:
+    # --------------------------------------------------------
+    # GEMINI RETRY + FALLBACK
+    # --------------------------------------------------------
+    # Try the configured model first. If Gemini temporarily returns
+    # 503/5xx/429, retry it and then move to the fallback models.
 
-        response = (
-            client.models.generate_content(
-                model=GEMINI_MODEL,
-                contents=contents,
-                config=types.GenerateContentConfig(
-                    system_instruction=
-                    system_instruction,
-                    temperature=0.2,
-                    max_output_tokens=
-                    MAX_OUTPUT_TOKENS
+    models_to_try = [GEMINI_MODEL]
+
+    for fallback_model in GEMINI_FALLBACK_MODELS:
+        if fallback_model not in models_to_try:
+            models_to_try.append(fallback_model)
+
+
+    last_error = None
+
+    for model_name in models_to_try:
+
+        for attempt in range(GEMINI_RETRY_COUNT):
+
+            try:
+
+                response = client.models.generate_content(
+                    model=model_name,
+                    contents=contents,
+                    config=types.GenerateContentConfig(
+                        system_instruction=system_instruction,
+                        max_output_tokens=MAX_OUTPUT_TOKENS
+                    )
                 )
-            )
-        )
 
-        answer = response.text
+                answer = response.text
 
-        if not answer:
+                if not answer:
+                    return "I couldn't generate a response."
 
-            return (
-                "I couldn't generate a response."
-            )
+                return answer.strip()
 
-        return answer.strip()
+            except Exception as error:
 
-    except Exception as error:
+                last_error = error
+                error_text = str(error).upper()
 
-        return (
-            "⚠️ Gemini error:\n\n"
-            f"{error}\n\n"
-            "If the error says the model is unavailable, "
-            "check GEMINI_MODEL in Streamlit Secrets."
-        )
+                # Temporary Gemini service/rate-limit errors.
+                temporary_error = any(
+                    code in error_text
+                    for code in [
+                        "503",
+                        "UNAVAILABLE",
+                        "500",
+                        "502",
+                        "504",
+                        "429",
+                        "RESOURCE_EXHAUSTED"
+                    ]
+                )
+
+                if not temporary_error:
+                    # Model/key/configuration errors should not be hidden
+                    # by repeatedly retrying the same request.
+                    break
+
+                if attempt < GEMINI_RETRY_COUNT - 1:
+                    time.sleep(
+                        GEMINI_RETRY_DELAY_SECONDS * (2 ** attempt)
+                    )
+
+        # Move to the next model after the retries above.
+        if model_name != models_to_try[-1]:
+            time.sleep(1)
+
+
+    return (
+        "⚠️ Gemini is temporarily unavailable.\n\n"
+        "I tried the configured Gemini model and the fallback models, "
+        "but they are currently unavailable. Please try again in a few "
+        "minutes.\n\n"
+        f"Last error: {last_error}"
+    )
 
 
 # ============================================================
