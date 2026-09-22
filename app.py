@@ -2152,6 +2152,187 @@ if not current_chat:
 
 
 # ============================================================
+# CHAT ATTACHMENTS
+# ============================================================
+
+def save_chat_attachments(uploaded_files, username, chat_id):
+    """Save documents/images submitted through the chat input."""
+
+    if not uploaded_files:
+        return [], []
+
+    manifest = load_knowledge_manifest(
+        username,
+        chat_id
+    )
+
+    current_chat = get_chat(
+        username,
+        chat_id
+    )
+
+    existing_document_hashes = {
+        item.get("hash")
+        for item in manifest.get(
+            "documents",
+            []
+        )
+    }
+
+    existing_image_hashes = set(
+        current_chat.get(
+            "image_hashes",
+            []
+        )
+    )
+
+    saved_documents = []
+    saved_images = []
+    manifest_changed = False
+    chat_changed = False
+
+    document_extensions = {
+        ".pdf",
+        ".docx",
+        ".txt",
+        ".md",
+        ".csv",
+        ".xlsx",
+        ".xls"
+    }
+
+    image_extensions = {
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".webp"
+    }
+
+    for uploaded_file in uploaded_files:
+
+        data = uploaded_file.getvalue()
+        filename = safe_filename(uploaded_file.name)
+        extension = Path(filename).suffix.lower()
+        current_hash = file_hash(data)
+
+        # ----------------------------------------------------
+        # DOCUMENT
+        # ----------------------------------------------------
+        if extension in document_extensions:
+
+            if current_hash in existing_document_hashes:
+                continue
+
+            save_path = (
+                get_documents_folder(
+                    username,
+                    chat_id
+                )
+                / filename
+            )
+
+            if save_path.exists():
+                save_path = (
+                    save_path.parent
+                    / (
+                        save_path.stem
+                        + "_"
+                        + current_hash[:8]
+                        + save_path.suffix
+                    )
+                )
+
+            with open(save_path, "wb") as file:
+                file.write(data)
+
+            manifest.setdefault(
+                "documents",
+                []
+            ).append(
+                {
+                    "name": save_path.name,
+                    "path": str(save_path),
+                    "hash": current_hash,
+                    "uploaded_at": now_iso()
+                }
+            )
+
+            current_chat.setdefault(
+                "documents",
+                []
+            ).append(save_path.name)
+
+            existing_document_hashes.add(current_hash)
+            saved_documents.append(save_path.name)
+            manifest_changed = True
+            chat_changed = True
+            continue
+
+        # ----------------------------------------------------
+        # IMAGE
+        # ----------------------------------------------------
+        if extension in image_extensions:
+
+            if current_hash in existing_image_hashes:
+                continue
+
+            save_path = (
+                get_images_folder(
+                    username,
+                    chat_id
+                )
+                / filename
+            )
+
+            if save_path.exists():
+                save_path = (
+                    save_path.parent
+                    / (
+                        save_path.stem
+                        + "_"
+                        + current_hash[:8]
+                        + save_path.suffix
+                    )
+                )
+
+            with open(save_path, "wb") as file:
+                file.write(data)
+
+            current_chat.setdefault(
+                "images",
+                []
+            ).append(save_path.name)
+
+            current_chat.setdefault(
+                "image_hashes",
+                []
+            ).append(current_hash)
+
+            existing_image_hashes.add(current_hash)
+            saved_images.append(save_path.name)
+            chat_changed = True
+            continue
+
+    if manifest_changed:
+        save_knowledge_manifest(
+            username,
+            chat_id,
+            manifest
+        )
+
+    if chat_changed:
+        current_chat["updated_at"] = now_iso()
+        update_chat(
+            username,
+            chat_id,
+            current_chat
+        )
+        load_current_chat_knowledge()
+
+    return saved_documents, saved_images
+
+
+# ============================================================
 # SIDEBAR
 # ============================================================
 
@@ -2372,340 +2553,6 @@ with st.sidebar:
             )
 
             st.rerun()
-
-
-    # ========================================================
-    # DOCUMENTS
-    # ========================================================
-
-    st.markdown(
-        "### 📄 Documents"
-    )
-
-    st.caption(
-        "Documents belong only to this chat."
-    )
-
-    uploaded_files = st.file_uploader(
-        "Upload documents",
-        type=[
-            "pdf",
-            "docx",
-            "txt",
-            "md",
-            "csv",
-            "xlsx",
-            "xls"
-        ],
-        accept_multiple_files=True,
-        key=(
-            "documents_"
-            + st.session_state.chat_id
-            + "_"
-            + str(
-                st.session_state.upload_version
-            )
-        )
-    )
-
-
-    if uploaded_files:
-
-        manifest = load_knowledge_manifest(
-            username,
-            st.session_state.chat_id
-        )
-
-        existing_hashes = {
-            item.get("hash")
-            for item in manifest.get(
-                "documents",
-                []
-            )
-        }
-
-        changed = False
-
-
-        for uploaded_file in uploaded_files:
-
-            data = uploaded_file.getvalue()
-
-            current_hash = file_hash(
-                data
-            )
-
-            if current_hash in existing_hashes:
-
-                continue
-
-
-            filename = safe_filename(
-                uploaded_file.name
-            )
-
-            save_path = (
-                get_documents_folder(
-                    username,
-                    st.session_state.chat_id
-                )
-                / filename
-            )
-
-
-            if save_path.exists():
-
-                save_path = (
-                    save_path.parent
-                    / (
-                        save_path.stem
-                        + "_"
-                        + current_hash[:8]
-                        + save_path.suffix
-                    )
-                )
-
-
-            with open(
-                save_path,
-                "wb"
-            ) as file:
-
-                file.write(data)
-
-
-            manifest.setdefault(
-                "documents",
-                []
-            ).append(
-                {
-                    "name": save_path.name,
-                    "path": str(save_path),
-                    "hash": current_hash,
-                    "uploaded_at": now_iso()
-                }
-            )
-
-
-            current_chat.setdefault(
-                "documents",
-                []
-            ).append(
-                save_path.name
-            )
-
-
-            existing_hashes.add(
-                current_hash
-            )
-
-            changed = True
-
-
-        if changed:
-
-            save_knowledge_manifest(
-                username,
-                st.session_state.chat_id,
-                manifest
-            )
-
-            current_chat["updated_at"] = now_iso()
-
-            update_chat(
-                username,
-                st.session_state.chat_id,
-                current_chat
-            )
-
-            load_current_chat_knowledge()
-
-            st.success(
-                "Document added to this chat."
-            )
-
-            st.rerun()
-
-
-    # ========================================================
-    # DOCUMENT LIST
-    # ========================================================
-
-    manifest = load_knowledge_manifest(
-        username,
-        st.session_state.chat_id
-    )
-
-    documents = manifest.get(
-        "documents",
-        []
-    )
-
-    if documents:
-
-        st.caption(
-            f"{len(documents)} document(s)"
-        )
-
-        for document in documents:
-
-            st.write(
-                "📄 "
-                + document.get(
-                    "name",
-                    "Document"
-                )
-            )
-
-
-    # ========================================================
-    # IMAGE UPLOAD
-    # ========================================================
-
-    st.markdown(
-        "### 🖼️ Images"
-    )
-
-    uploaded_images = st.file_uploader(
-        "Upload images",
-        type=[
-            "png",
-            "jpg",
-            "jpeg",
-            "webp"
-        ],
-        accept_multiple_files=True,
-        key=(
-            "images_"
-            + st.session_state.chat_id
-            + "_"
-            + str(
-                st.session_state.upload_version
-            )
-        )
-    )
-
-
-    if uploaded_images:
-
-        current_chat = get_chat(
-            username,
-            st.session_state.chat_id
-        )
-
-        existing_hashes = set(
-            current_chat.get(
-                "image_hashes",
-                []
-            )
-        )
-
-        changed = False
-
-
-        for uploaded_image in uploaded_images:
-
-            data = uploaded_image.getvalue()
-
-            current_hash = file_hash(
-                data
-            )
-
-            if current_hash in existing_hashes:
-
-                continue
-
-
-            filename = safe_filename(
-                uploaded_image.name
-            )
-
-            save_path = (
-                get_images_folder(
-                    username,
-                    st.session_state.chat_id
-                )
-                / filename
-            )
-
-
-            if save_path.exists():
-
-                save_path = (
-                    save_path.parent
-                    / (
-                        save_path.stem
-                        + "_"
-                        + current_hash[:8]
-                        + save_path.suffix
-                    )
-                )
-
-
-            with open(
-                save_path,
-                "wb"
-            ) as file:
-
-                file.write(data)
-
-
-            current_chat.setdefault(
-                "images",
-                []
-            ).append(
-                save_path.name
-            )
-
-            current_chat.setdefault(
-                "image_hashes",
-                []
-            ).append(
-                current_hash
-            )
-
-            existing_hashes.add(
-                current_hash
-            )
-
-            changed = True
-
-
-        if changed:
-
-            current_chat["updated_at"] = now_iso()
-
-            update_chat(
-                username,
-                st.session_state.chat_id,
-                current_chat
-            )
-
-            st.success(
-                "Image added to this chat."
-            )
-
-            st.rerun()
-
-
-    # ========================================================
-    # IMAGE LIST
-    # ========================================================
-
-    image_files = load_current_chat_images()
-
-    if image_files:
-
-        st.caption(
-            f"{len(image_files)} image(s)"
-        )
-
-        for image_file in image_files:
-
-            st.write(
-                "🖼️ "
-                + image_file.name
-            )
 
 
     # ========================================================
@@ -3165,25 +3012,99 @@ for message in messages:
 # CHAT INPUT
 # ============================================================
 
-prompt = st.chat_input(
+chat_submission = st.chat_input(
     "Message AI Document Intelligence",
+    accept_file="multiple",
+    file_type=[
+        "pdf",
+        "docx",
+        "txt",
+        "md",
+        "csv",
+        "xlsx",
+        "xls",
+        "png",
+        "jpg",
+        "jpeg",
+        "webp"
+    ],
     key=(
         "chat_input_"
         + st.session_state.chat_id
     )
 )
 
+# Streamlit returns a ChatInputValue when file attachments are enabled.
+prompt = ""
+attached_files = []
+saved_documents = []
+saved_images = []
+
+if chat_submission:
+    prompt = getattr(
+        chat_submission,
+        "text",
+        ""
+    ) or ""
+    attached_files = list(
+        getattr(
+            chat_submission,
+            "files",
+            []
+        ) or []
+    )
+
 
 # ============================================================
 # PROCESS QUESTION
 # ============================================================
 
-if prompt:
+if chat_submission:
 
     prompt = prompt.strip()
 
+    # --------------------------------------------------------
+    # SAVE FILES FROM THE CHAT INPUT (+ ATTACHMENT BUTTON)
+    # --------------------------------------------------------
+
+    if attached_files:
+
+        saved_documents, saved_images = save_chat_attachments(
+            attached_files,
+            username,
+            st.session_state.chat_id
+        )
+
+        if saved_documents or saved_images:
+            st.session_state.upload_version += 1
+
+    # If the user only uploaded files, keep the upload in the chat
+    # and wait for their next question instead of calling Gemini.
     if not prompt:
-        st.stop()
+
+        if saved_documents or saved_images:
+            parts = []
+
+            if saved_documents:
+                parts.append(
+                    "📄 "
+                    + str(len(saved_documents))
+                    + " document(s) added"
+                )
+
+            if saved_images:
+                parts.append(
+                    "🖼️ "
+                    + str(len(saved_images))
+                    + " image(s) added"
+                )
+
+            st.success(
+                " · ".join(parts)
+                + ". You can now ask a question about them."
+            )
+
+        st.rerun()
 
 
     # --------------------------------------------------------
@@ -3230,6 +3151,17 @@ if prompt:
         "user",
         avatar="👤"
     ):
+
+        if attached_files:
+            attachment_names = [
+                file.name
+                for file in attached_files
+            ]
+
+            st.caption(
+                "📎 "
+                + " · ".join(attachment_names)
+            )
 
         st.markdown(
             prompt
