@@ -25,7 +25,7 @@ import streamlit as st
 import requests
 import pandas as pd
 
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 from pypdf import PdfReader
 from docx import Document
 
@@ -1409,6 +1409,67 @@ def run_python_code_safely(code):
 
 
 # ============================================================
+# FLOWCHART GENERATION
+# ============================================================
+
+def is_flowchart_request(question):
+    keywords = ["flowchart", "flow chart", "process diagram", "workflow diagram", "create a diagram", "draw a flowchart", "make a flowchart", "generate a flowchart"]
+    return any(keyword in question.lower() for keyword in keywords)
+
+def generate_flowchart_data(question):
+    client = get_gemini_client()
+    if client is None:
+        return None
+    prompt = f"""Create a simple and clear flowchart for this request:
+
+{question}
+
+Return ONLY valid JSON using exactly this format:
+{{"title":"Flowchart Title","nodes":[{{"id":"1","text":"Start"}},{{"id":"2","text":"Process"}},{{"id":"3","text":"End"}}],"connections":[{{"from":"1","to":"2"}},{{"from":"2","to":"3"}}]}}
+
+Rules: 3-10 nodes; start with Start; end with End; short clear node text; simple connections; JSON only; no Markdown."""
+    try:
+        response = client.models.generate_content(model=get_selected_model(), contents=prompt, config=types.GenerateContentConfig(max_output_tokens=4000))
+        result = (response.text or "").strip().replace("```json", "").replace("```", "").strip()
+        return json.loads(result)
+    except Exception as error:
+        print("Flowchart generation error:", error)
+        return None
+
+def create_flowchart_image(flowchart_data):
+    nodes = flowchart_data.get("nodes", [])
+    connections = flowchart_data.get("connections", [])
+    if not nodes:
+        return None
+    width, node_width, node_height, vertical_gap = 1000, 600, 100, 80
+    height = 160 + len(nodes) * (node_height + vertical_gap)
+    image = Image.new("RGB", (width, height), "white")
+    draw = ImageDraw.Draw(image)
+    try:
+        title_font = ImageFont.truetype("DejaVuSans-Bold.ttf", 34)
+        node_font = ImageFont.truetype("DejaVuSans.ttf", 25)
+    except Exception:
+        title_font = ImageFont.load_default(); node_font = ImageFont.load_default()
+    title = flowchart_data.get("title", "AI Generated Flowchart")
+    box = draw.textbbox((0,0), title, font=title_font)
+    draw.text(((width-(box[2]-box[0]))/2,30), title, fill="black", font=title_font)
+    positions = {}
+    for i,node in enumerate(nodes):
+        positions[str(node.get("id",i+1))] = ((width-node_width)//2, 100+i*(node_height+vertical_gap))
+    for c in connections:
+        source, target = positions.get(str(c.get("from",""))), positions.get(str(c.get("to","")))
+        if not source or not target: continue
+        x1,y1=source[0]+node_width//2,source[1]+node_height; x2,y2=target[0]+node_width//2,target[1]
+        draw.line((x1,y1,x2,y2),fill="black",width=4)
+        a=12; draw.polygon([(x2,y2),(x2-a,y2-a),(x2+a,y2-a)],fill="black")
+    for i,node in enumerate(nodes):
+        node_id=str(node.get("id",i+1)); x,y=positions[node_id]
+        draw.rounded_rectangle((x,y,x+node_width,y+node_height),radius=20,outline="black",width=3)
+        text=str(node.get("text","")); box=draw.textbbox((0,0),text,font=node_font)
+        draw.text((x+(node_width-(box[2]-box[0]))/2,y+(node_height-(box[3]-box[1]))/2),text,fill="black",font=node_font)
+    output_path="generated_flowchart.png"; image.save(output_path,format="PNG"); return output_path
+
+# ============================================================
 # GEMINI RESPONSE
 # ============================================================
 
@@ -1478,7 +1539,7 @@ IMPORTANT:
 33. If a request falls into one of these restricted areas, clearly explain the limitation in simple language and, when possible, provide a safe informational alternative such as summarizing the uploaded document, explaining concepts, checking arithmetic, or preparing questions for a qualified professional.
 34. Never claim that this application can replace a CA, doctor, lawyer, auditor, financial advisor, engineer, emergency responder, or other licensed/qualified professional.
 35. The application can support optional voice input by transcribing user-provided audio into text. Do not claim to hear audio unless audio was actually supplied.
-36. The application can support optional image generation when the user explicitly asks to create an image. Do not claim an image was generated unless the image tool actually returned image data.
+36. The application can generate simple flowchart images when the user explicitly asks for a flowchart. Do not claim a flowchart image was generated unless the flowchart generator actually returned image data.
 37. The application includes a limited Python execution utility for short, non-network, non-file-access code. Never claim it is a secure unrestricted coding sandbox.
 38. When useful, act as a tool-orchestrating assistant: decide whether the user's request needs document retrieval, image understanding, calculation, code execution, or ordinary conversation, and use only the relevant capability.
 39. The application can let the user choose among supported Gemini foundation models. Clearly distinguish the selected model from any claim about model quality.
@@ -2453,7 +2514,7 @@ with st.sidebar:
             st.code(run_python_code_safely(code), language="text")
 
         st.info(
-            "Voice, image generation, and code execution are optional tools. "
+            "Voice, flowchart generation, and code execution are optional tools. "
             "Code execution is intentionally limited and is not a production sandbox."
         )
 
@@ -3192,22 +3253,27 @@ if chat_submission:
         avatar="🤖"
     ):
 
-        with st.spinner(
-            "🤖 Thinking..."
-        ):
-
-            answer = generate_ai_response(
-                question=prompt,
-                chat_history=chat_history,
-                document_context=document_context,
-                sources=sources,
-                image_paths=image_paths,
-                user_sentiment=user_sentiment
-            )
-
-        st.markdown(
-            answer
-        )
+        if is_flowchart_request(prompt):
+            with st.spinner("📊 Creating flowchart..."):
+                flowchart_data = generate_flowchart_data(prompt)
+                flowchart_path = create_flowchart_image(flowchart_data) if flowchart_data else None
+            if flowchart_path:
+                st.image(flowchart_path, caption="AI Generated Flowchart", use_container_width=True)
+                answer = "📊 I created the flowchart for you."
+            else:
+                answer = "⚠️ I couldn't create the flowchart right now. Please try again."
+            st.markdown(answer)
+        else:
+            with st.spinner("🤖 Thinking..."):
+                answer = generate_ai_response(
+                    question=prompt,
+                    chat_history=chat_history,
+                    document_context=document_context,
+                    sources=sources,
+                    image_paths=image_paths,
+                    user_sentiment=user_sentiment
+                )
+            st.markdown(answer)
 
 
     # --------------------------------------------------------
