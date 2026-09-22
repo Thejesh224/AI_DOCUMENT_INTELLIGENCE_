@@ -47,40 +47,39 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-
 # ============================================================
 # SETTINGS
 # ============================================================
 
 APP_NAME = "AI Document Intelligence"
 
+# Default Gemini model
 GEMINI_MODEL = st.secrets.get(
     "GEMINI_MODEL",
     os.getenv(
         "GEMINI_MODEL",
-        "gemini-3.8-flash"
+        "gemini-2.5-flash"
     )
 )
 
-# Gemini models used when the primary model is temporarily unavailable.
-# These are stable Gemini Flash models.
+# Fallback models
 GEMINI_FALLBACK_MODELS = [
-    "gemini-3.6-flash",
-    "gemini-3.5-flash",
+    "gemini-2.5-flash-lite",
 ]
 
 GEMINI_RETRY_COUNT = 2
 GEMINI_RETRY_DELAY_SECONDS = 2
 
-MAX_OUTPUT_TOKENS = 4096
+# Maximum output token request
+MAX_OUTPUT_TOKENS = 100000
 
-# Optional advanced AI capabilities. These use the same Gemini API key.
+# Models available in the sidebar
 AVAILABLE_GEMINI_MODELS = [
-    "gemini-3.8-flash",
-    "gemini-3.7-flash",
-    "gemini-3.6-flash",
-    "gemini-3.5-flash",
+    "gemini-2.5-flash",
+    "gemini-2.5-flash-lite",
 ]
+
+# Document processing
 CHUNK_SIZE = 1200
 CHUNK_OVERLAP = 150
 RETRIEVER_K = 5
@@ -96,7 +95,6 @@ CHAT_STORAGE.mkdir(
     parents=True,
     exist_ok=True
 )
-
 
 # ============================================================
 # CSS
