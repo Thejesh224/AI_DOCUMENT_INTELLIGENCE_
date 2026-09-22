@@ -26,6 +26,7 @@ import requests
 import pandas as pd
 
 from PIL import Image, ImageDraw, ImageFont
+from io import BytesIO
 from pypdf import PdfReader
 from docx import Document
 
@@ -85,6 +86,86 @@ CHAT_STORAGE.mkdir(
     parents=True,
     exist_ok=True
 )
+
+
+# ============================================================
+# USER LIBRARY
+# ============================================================
+
+def get_user_library_folder(username):
+    folder = (
+        CHAT_STORAGE
+        / str(username)
+        / "library"
+        / "flowcharts"
+    )
+
+    folder.mkdir(
+        parents=True,
+        exist_ok=True
+    )
+
+    return folder
+
+
+def save_flowchart_to_library(
+    username,
+    chat_id,
+    flowchart_path,
+    title="AI Generated Flowchart"
+):
+    """Copy a generated flowchart into the user's persistent app library."""
+
+    if not flowchart_path:
+        return None
+
+    source = Path(flowchart_path)
+
+    if not source.exists():
+        return None
+
+    library_folder = get_user_library_folder(username)
+
+    safe_title = re.sub(
+        r"[^A-Za-z0-9_-]+",
+        "_",
+        str(title).strip()
+    ).strip("_")[:60]
+
+    if not safe_title:
+        safe_title = "flowchart"
+
+    destination = library_folder / (
+        safe_title
+        + "_"
+        + uuid.uuid4().hex[:10]
+        + ".png"
+    )
+
+    shutil.copy2(
+        source,
+        destination
+    )
+
+    return str(destination)
+
+
+def get_library_flowcharts(username):
+    """Return generated flowchart images saved in the user's library."""
+
+    folder = get_user_library_folder(username)
+
+    images = []
+
+    for path in folder.iterdir():
+        if path.is_file() and path.suffix.lower() == ".png":
+            images.append(path)
+
+    return sorted(
+        images,
+        key=lambda item: item.stat().st_mtime,
+        reverse=True
+    )
 
 
 # ============================================================
@@ -1413,61 +1494,610 @@ def run_python_code_safely(code):
 # ============================================================
 
 def is_flowchart_request(question):
-    keywords = ["flowchart", "flow chart", "process diagram", "workflow diagram", "create a diagram", "draw a flowchart", "make a flowchart", "generate a flowchart"]
-    return any(keyword in question.lower() for keyword in keywords)
 
-def generate_flowchart_data(question):
-    client = get_gemini_client()
-    if client is None:
+    if not question:
+        return False
+
+    text = question.lower().strip()
+
+    keywords = [
+        "flowchart",
+        "flow chart",
+        "process diagram",
+        "workflow diagram",
+        "create a diagram",
+        "draw a flowchart",
+        "make a flowchart",
+        "generate a flowchart",
+        "show the steps as a diagram",
+        "show the process as a diagram"
+    ]
+
+    return any(
+        keyword in text
+        for keyword in keywords
+    )
+
+
+def _clean_flowchart_json(text):
+
+    if not text:
         return None
-    prompt = f"""Create a simple and clear flowchart for this request:
 
+    text = text.strip()
+
+    # Remove Markdown code fences if Gemini returns them.
+    text = re.sub(
+        r"^```(?:json)?\s*",
+        "",
+        text,
+        flags=re.IGNORECASE
+    )
+
+    text = re.sub(
+        r"\s*```$",
+        "",
+        text
+    )
+
+    # Keep only the outer JSON object.
+    start = text.find("{")
+    end = text.rfind("}")
+
+    if start == -1 or end == -1 or end <= start:
+        return None
+
+    try:
+        return json.loads(
+            text[start:end + 1]
+        )
+    except Exception:
+        return None
+
+
+def generate_flowchart_data(
+    question,
+    document_context=""
+):
+
+    client = get_gemini_client()
+
+    if client is None:
+        return None, "Gemini API key is not configured."
+
+    context = document_context.strip()
+
+    if len(context) > 12000:
+        context = context[:12000]
+
+    prompt = f"""
+Create a clear flowchart for the user's request.
+
+USER REQUEST:
 {question}
 
-Return ONLY valid JSON using exactly this format:
-{{"title":"Flowchart Title","nodes":[{{"id":"1","text":"Start"}},{{"id":"2","text":"Process"}},{{"id":"3","text":"End"}}],"connections":[{{"from":"1","to":"2"}},{{"from":"2","to":"3"}}]}}
+CURRENT CHAT DOCUMENT CONTEXT, IF ANY:
+{context if context else "No document context."}
 
-Rules: 3-10 nodes; start with Start; end with End; short clear node text; simple connections; JSON only; no Markdown."""
-    try:
-        response = client.models.generate_content(model=get_selected_model(), contents=prompt, config=types.GenerateContentConfig(max_output_tokens=4000))
-        result = (response.text or "").strip().replace("```json", "").replace("```", "").strip()
-        return json.loads(result)
-    except Exception as error:
-        print("Flowchart generation error:", error)
-        return None
+Return ONLY valid JSON. Do not use Markdown. Do not add explanations.
 
-def create_flowchart_image(flowchart_data):
+Use exactly this structure:
+{{
+  "title": "short flowchart title",
+  "nodes": [
+    {{"id": "start", "label": "Start", "type": "start"}},
+    {{"id": "step1", "label": "First step", "type": "process"}},
+    {{"id": "decision1", "label": "Condition?", "type": "decision"}},
+    {{"id": "end", "label": "End", "type": "end"}}
+  ],
+  "edges": [
+    {{"from": "start", "to": "step1", "label": ""}},
+    {{"from": "step1", "to": "decision1", "label": ""}},
+    {{"from": "decision1", "to": "end", "label": "Yes"}}
+  ]
+}}
+
+Rules:
+- Start with a start node and finish with at least one end node.
+- Use process nodes for normal steps.
+- Use decision nodes for yes/no or other branching conditions.
+- Use short labels that fit inside diagram shapes.
+- Include the important steps only; normally use 4 to 15 nodes.
+- For branching, create separate edges and label them clearly, such as Yes and No.
+- IDs must be unique and contain only letters, numbers, underscores, or hyphens.
+- Every edge must reference an existing node ID.
+- Do not put code fences around the JSON.
+"""
+
+    models_to_try = [get_selected_model()]
+
+    for fallback_model in GEMINI_FALLBACK_MODELS:
+        if fallback_model not in models_to_try:
+            models_to_try.append(fallback_model)
+
+    last_error = None
+
+    for model_name in models_to_try:
+
+        for attempt in range(GEMINI_RETRY_COUNT):
+
+            try:
+
+                response = client.models.generate_content(
+                    model=model_name,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        max_output_tokens=6000,
+                        temperature=0.2,
+                        response_mime_type="application/json"
+                    )
+                )
+
+                data = _clean_flowchart_json(
+                    response.text or ""
+                )
+
+                if data and isinstance(data.get("nodes"), list) and isinstance(data.get("edges"), list):
+                    return data, None
+
+                last_error = "Gemini returned an invalid flowchart structure."
+                break
+
+            except Exception as error:
+
+                last_error = error
+                error_text = str(error).upper()
+
+                quota_error = (
+                    "429" in error_text
+                    or "RESOURCE_EXHAUSTED" in error_text
+                    or "QUOTA_EXCEEDED" in error_text
+                )
+
+                if quota_error:
+                    break
+
+                temporary_error = any(
+                    code in error_text
+                    for code in [
+                        "503",
+                        "UNAVAILABLE",
+                        "500",
+                        "502",
+                        "504"
+                    ]
+                )
+
+                if not temporary_error:
+                    break
+
+                if attempt < GEMINI_RETRY_COUNT - 1:
+                    time.sleep(
+                        GEMINI_RETRY_DELAY_SECONDS * (2 ** attempt)
+                    )
+
+        if model_name != models_to_try[-1]:
+            time.sleep(1)
+
+    return None, str(last_error or "Unable to generate the flowchart.")
+
+
+def _get_flowchart_font(size, bold=False):
+
+    candidates = []
+
+    if os.name == "nt":
+        candidates.extend([
+            r"C:\\Windows\\Fonts\\arialbd.ttf" if bold else r"C:\\Windows\\Fonts\\arial.ttf",
+            r"C:\\Windows\\Fonts\\segoeuib.ttf" if bold else r"C:\\Windows\\Fonts\\segoeui.ttf"
+        ])
+
+    candidates.extend([
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf"
+    ])
+
+    for candidate in candidates:
+        try:
+            return ImageFont.truetype(
+                candidate,
+                size
+            )
+        except Exception:
+            continue
+
+    return ImageFont.load_default()
+
+
+def _wrap_flowchart_text(draw, text, font, max_width):
+
+    words = str(text).split()
+
+    if not words:
+        return [""]
+
+    lines = []
+    current = ""
+
+    for word in words:
+
+        test = word if not current else current + " " + word
+        bbox = draw.textbbox((0, 0), test, font=font)
+
+        if bbox[2] - bbox[0] <= max_width:
+            current = test
+        else:
+            if current:
+                lines.append(current)
+            current = word
+
+    if current:
+        lines.append(current)
+
+    return lines
+
+
+def create_flowchart_image(
+    flowchart_data,
+    username,
+    chat_id
+):
+
     nodes = flowchart_data.get("nodes", [])
-    connections = flowchart_data.get("connections", [])
+    edges = flowchart_data.get("edges", [])
+
     if not nodes:
         return None
-    width, node_width, node_height, vertical_gap = 1000, 600, 100, 80
-    height = 160 + len(nodes) * (node_height + vertical_gap)
-    image = Image.new("RGB", (width, height), "white")
+
+    valid_ids = {
+        str(node.get("id"))
+        for node in nodes
+        if node.get("id")
+    }
+
+    clean_nodes = []
+
+    for node in nodes:
+        node_id = str(node.get("id", "")).strip()
+        if not node_id or node_id not in valid_ids:
+            continue
+
+        clean_nodes.append({
+            "id": node_id,
+            "label": str(node.get("label", node_id)).strip()[:100],
+            "type": str(node.get("type", "process")).lower().strip()
+        })
+
+    if not clean_nodes:
+        return None
+
+    node_map = {
+        node["id"]: node
+        for node in clean_nodes
+    }
+
+    clean_edges = []
+
+    for edge in edges:
+        source = str(edge.get("from", "")).strip()
+        target = str(edge.get("to", "")).strip()
+
+        if source in node_map and target in node_map and source != target:
+            clean_edges.append({
+                "from": source,
+                "to": target,
+                "label": str(edge.get("label", "")).strip()[:30]
+            })
+
+    children = {node["id"]: [] for node in clean_nodes}
+    parents = {node["id"]: [] for node in clean_nodes}
+
+    for edge in clean_edges:
+        children[edge["from"]].append(edge["to"])
+        parents[edge["to"]].append(edge["from"])
+
+    roots = [
+        node["id"]
+        for node in clean_nodes
+        if not parents[node["id"]]
+    ]
+
+    if not roots:
+        roots = [clean_nodes[0]["id"]]
+
+    levels = {}
+    queue = [(root, 0) for root in roots]
+    seen = set()
+
+    while queue:
+        node_id, level = queue.pop(0)
+        if node_id in seen and level <= levels.get(node_id, 0):
+            continue
+
+        seen.add(node_id)
+        levels[node_id] = max(
+            level,
+            levels.get(node_id, 0)
+        )
+
+        for child in children.get(node_id, []):
+            queue.append((child, levels[node_id] + 1))
+
+    for node in clean_nodes:
+        levels.setdefault(node["id"], 0)
+
+    grouped = {}
+
+    for node in clean_nodes:
+        grouped.setdefault(
+            levels[node["id"]],
+            []
+        ).append(node["id"])
+
+    width = 1500
+    node_width = 330
+    node_height = 100
+    horizontal_gap = 70
+    vertical_gap = 130
+    top_margin = 120
+    side_margin = 80
+
+    max_nodes_in_level = max(
+        len(items)
+        for items in grouped.values()
+    )
+
+    height = max(
+        700,
+        top_margin + (max(grouped.keys()) + 1) * (node_height + vertical_gap) + 100
+    )
+
+    image = Image.new(
+        "RGB",
+        (width, height),
+        "#171717"
+    )
+
     draw = ImageDraw.Draw(image)
-    try:
-        title_font = ImageFont.truetype("DejaVuSans-Bold.ttf", 34)
-        node_font = ImageFont.truetype("DejaVuSans.ttf", 25)
-    except Exception:
-        title_font = ImageFont.load_default(); node_font = ImageFont.load_default()
-    title = flowchart_data.get("title", "AI Generated Flowchart")
-    box = draw.textbbox((0,0), title, font=title_font)
-    draw.text(((width-(box[2]-box[0]))/2,30), title, fill="black", font=title_font)
+    title_font = _get_flowchart_font(34, bold=True)
+    node_font = _get_flowchart_font(24, bold=True)
+    small_font = _get_flowchart_font(18, bold=False)
+
+    title = str(
+        flowchart_data.get(
+            "title",
+            "AI Generated Flowchart"
+        )
+    ).strip()[:100]
+
+    title_bbox = draw.textbbox(
+        (0, 0),
+        title,
+        font=title_font
+    )
+
+    draw.text(
+        (
+            (width - (title_bbox[2] - title_bbox[0])) / 2,
+            35
+        ),
+        title,
+        fill="#ffffff",
+        font=title_font
+    )
+
     positions = {}
-    for i,node in enumerate(nodes):
-        positions[str(node.get("id",i+1))] = ((width-node_width)//2, 100+i*(node_height+vertical_gap))
-    for c in connections:
-        source, target = positions.get(str(c.get("from",""))), positions.get(str(c.get("to","")))
-        if not source or not target: continue
-        x1,y1=source[0]+node_width//2,source[1]+node_height; x2,y2=target[0]+node_width//2,target[1]
-        draw.line((x1,y1,x2,y2),fill="black",width=4)
-        a=12; draw.polygon([(x2,y2),(x2-a,y2-a),(x2+a,y2-a)],fill="black")
-    for i,node in enumerate(nodes):
-        node_id=str(node.get("id",i+1)); x,y=positions[node_id]
-        draw.rounded_rectangle((x,y,x+node_width,y+node_height),radius=20,outline="black",width=3)
-        text=str(node.get("text","")); box=draw.textbbox((0,0),text,font=node_font)
-        draw.text((x+(node_width-(box[2]-box[0]))/2,y+(node_height-(box[3]-box[1]))/2),text,fill="black",font=node_font)
-    output_path="generated_flowchart.png"; image.save(output_path,format="PNG"); return output_path
+
+    for level in sorted(grouped):
+
+        ids = grouped[level]
+        count = len(ids)
+        total_width = count * node_width + (count - 1) * horizontal_gap
+        start_x = max(
+            side_margin,
+            (width - total_width) / 2
+        )
+        y = top_margin + level * (node_height + vertical_gap)
+
+        for index, node_id in enumerate(ids):
+            x = start_x + index * (node_width + horizontal_gap)
+            positions[node_id] = (
+                int(x),
+                int(y)
+            )
+
+    def center(node_id):
+        x, y = positions[node_id]
+        return (
+            x + node_width // 2,
+            y + node_height // 2
+        )
+
+    # Draw connectors first so they appear behind nodes.
+    for edge in clean_edges:
+
+        sx, sy = center(edge["from"])
+        tx, ty = center(edge["to"])
+
+        if abs(tx - sx) < 10:
+            start = (sx, sy + node_height // 2)
+            end = (tx, ty - node_height // 2)
+        else:
+            start = (
+                sx + (node_width // 2 if tx > sx else -node_width // 2),
+                sy
+            )
+            end = (
+                tx - (node_width // 2 if tx > sx else -node_width // 2),
+                ty
+            )
+
+        draw.line(
+            [start, end],
+            fill="#8b8b8b",
+            width=5
+        )
+
+        # Arrow head.
+        import math
+        angle = math.atan2(
+            end[1] - start[1],
+            end[0] - start[0]
+        )
+        arrow_size = 16
+        left = (
+            end[0] - arrow_size * math.cos(angle - math.pi / 6),
+            end[1] - arrow_size * math.sin(angle - math.pi / 6)
+        )
+        right = (
+            end[0] - arrow_size * math.cos(angle + math.pi / 6),
+            end[1] - arrow_size * math.sin(angle + math.pi / 6)
+        )
+
+        draw.polygon(
+            [end, left, right],
+            fill="#8b8b8b"
+        )
+
+        label = edge.get("label", "")
+        if label:
+            mx = int((start[0] + end[0]) / 2)
+            my = int((start[1] + end[1]) / 2) - 14
+            bbox = draw.textbbox(
+                (0, 0),
+                label,
+                font=small_font
+            )
+            pad = 7
+            draw.rounded_rectangle(
+                [
+                    mx - (bbox[2] - bbox[0]) // 2 - pad,
+                    my - (bbox[3] - bbox[1]) // 2 - pad,
+                    mx + (bbox[2] - bbox[0]) // 2 + pad,
+                    my + (bbox[3] - bbox[1]) // 2 + pad
+                ],
+                radius=8,
+                fill="#262626"
+            )
+            draw.text(
+                (
+                    mx - (bbox[2] - bbox[0]) / 2,
+                    my - (bbox[3] - bbox[1]) / 2
+                ),
+                label,
+                fill="#f0f0f0",
+                font=small_font
+            )
+
+    # Draw nodes.
+    for node in clean_nodes:
+
+        node_id = node["id"]
+        label = node["label"]
+        node_type = node["type"]
+        x, y = positions[node_id]
+
+        lines = _wrap_flowchart_text(
+            draw,
+            label,
+            node_font,
+            node_width - 50
+        )
+
+        line_height = 32
+        text_height = len(lines) * line_height
+        text_y = y + (node_height - text_height) / 2
+
+        if node_type == "decision":
+            cx = x + node_width // 2
+            cy = y + node_height // 2
+            points = [
+                (cx, y),
+                (x + node_width, cy),
+                (cx, y + node_height),
+                (x, cy)
+            ]
+            draw.polygon(
+                points,
+                fill="#3a2f13",
+                outline="#d6a83b"
+            )
+            draw.line(
+                points + [points[0]],
+                fill="#d6a83b",
+                width=4
+            )
+
+        elif node_type == "start":
+            draw.rounded_rectangle(
+                [x, y, x + node_width, y + node_height],
+                radius=45,
+                fill="#173b2b",
+                outline="#45d483",
+                width=4
+            )
+
+        elif node_type == "end":
+            draw.rounded_rectangle(
+                [x, y, x + node_width, y + node_height],
+                radius=45,
+                fill="#3b2020",
+                outline="#e36b6b",
+                width=4
+            )
+
+        else:
+            draw.rounded_rectangle(
+                [x, y, x + node_width, y + node_height],
+                radius=20,
+                fill="#242b3a",
+                outline="#6f8edc",
+                width=4
+            )
+
+        for line in lines:
+            bbox = draw.textbbox(
+                (0, 0),
+                line,
+                font=node_font
+            )
+            draw.text(
+                (
+                    x + (node_width - (bbox[2] - bbox[0])) / 2,
+                    text_y
+                ),
+                line,
+                fill="#ffffff",
+                font=node_font
+            )
+            text_y += line_height
+
+    # Save a unique copy for this chat so the image survives Streamlit reruns.
+    flowchart_dir = (
+        CHAT_STORAGE
+        / str(username)
+        / str(chat_id)
+        / "flowcharts"
+    )
+
+    flowchart_dir.mkdir(
+        parents=True,
+        exist_ok=True
+    )
+
+    output_path = flowchart_dir / (
+        "flowchart_"
+        + uuid.uuid4().hex
+        + ".png"
+    )
+
+    image.save(
+        output_path,
+        format="PNG"
+    )
+
+    return str(output_path)
+
 
 # ============================================================
 # GEMINI RESPONSE
@@ -1539,7 +2169,7 @@ IMPORTANT:
 33. If a request falls into one of these restricted areas, clearly explain the limitation in simple language and, when possible, provide a safe informational alternative such as summarizing the uploaded document, explaining concepts, checking arithmetic, or preparing questions for a qualified professional.
 34. Never claim that this application can replace a CA, doctor, lawyer, auditor, financial advisor, engineer, emergency responder, or other licensed/qualified professional.
 35. The application can support optional voice input by transcribing user-provided audio into text. Do not claim to hear audio unless audio was actually supplied.
-36. The application can generate simple flowchart images when the user explicitly asks for a flowchart. Do not claim a flowchart image was generated unless the flowchart generator actually returned image data.
+36. The application can generate flowcharts as PNG images when the user explicitly asks for a flowchart. Do not claim a flowchart was generated unless the flowchart image was actually created and displayed.
 37. The application includes a limited Python execution utility for short, non-network, non-file-access code. Never claim it is a secure unrestricted coding sandbox.
 38. When useful, act as a tool-orchestrating assistant: decide whether the user's request needs document retrieval, image understanding, calculation, code execution, or ordinary conversation, and use only the relevant capability.
 39. The application can let the user choose among supported Gemini foundation models. Clearly distinguish the selected model from any claim about model quality.
@@ -1881,7 +2511,8 @@ def save_message(
     chat_id,
     role,
     content,
-    sentiment=None
+    sentiment=None,
+    flowchart_path=None
 ):
 
     chat = get_chat(
@@ -1900,7 +2531,8 @@ def save_message(
             "role": role,
             "content": content,
             "timestamp": now_iso(),
-            "sentiment": sentiment if role == "user" else None
+            "sentiment": sentiment if role == "user" else None,
+            "flowchart_path": flowchart_path if role == "assistant" else None
         }
     )
 
@@ -2474,6 +3106,53 @@ with st.sidebar:
 
 
     # ========================================================
+    # LIBRARY
+    # ========================================================
+
+    with st.expander("🖼️ Library", expanded=False):
+
+        library_flowcharts = get_library_flowcharts(
+            username
+        )
+
+        if not library_flowcharts:
+
+            st.caption(
+                "Your generated flowchart images will appear here."
+            )
+
+        else:
+
+            st.caption(
+                f"{len(library_flowcharts)} generated flowchart(s)"
+            )
+
+            for index, library_image in enumerate(
+                library_flowcharts
+            ):
+
+                st.image(
+                    str(library_image),
+                    use_container_width=True
+                )
+
+                st.caption(
+                    library_image.stem
+                    .replace("_", " ")
+                )
+
+                with open(library_image, "rb") as image_file:
+                    st.download_button(
+                        "⬇️ Download",
+                        data=image_file.read(),
+                        file_name=library_image.name,
+                        mime="image/png",
+                        key=f"library_download_{index}_{library_image.name}",
+                        use_container_width=True
+                    )
+
+
+    # ========================================================
     # ADVANCED AI TOOLS
     # ========================================================
 
@@ -3026,6 +3705,24 @@ for message in messages:
             content
         )
 
+        flowchart_path = message.get(
+            "flowchart_path"
+        )
+
+        if flowchart_path:
+
+            try:
+
+                if Path(flowchart_path).exists():
+                    st.image(
+                        flowchart_path,
+                        caption="📊 AI Generated Flowchart",
+                        use_container_width=True
+                    )
+
+            except Exception:
+                pass
+
 
 
 # ============================================================
@@ -3248,23 +3945,77 @@ if chat_submission:
     # AI RESPONSE
     # --------------------------------------------------------
 
+    flowchart_path = None
+
     with st.chat_message(
         "assistant",
         avatar="🤖"
     ):
 
         if is_flowchart_request(prompt):
-            with st.spinner("📊 Creating flowchart..."):
-                flowchart_data = generate_flowchart_data(prompt)
-                flowchart_path = create_flowchart_image(flowchart_data) if flowchart_data else None
+
+            with st.spinner(
+                "📊 Creating flowchart..."
+            ):
+
+                flowchart_data, flowchart_error = generate_flowchart_data(
+                    prompt,
+                    document_context=document_context
+                )
+
+                if flowchart_data:
+                    flowchart_path = create_flowchart_image(
+                        flowchart_data,
+                        username,
+                        st.session_state.chat_id
+                    )
+
+                    if flowchart_path:
+                        library_path = save_flowchart_to_library(
+                            username,
+                            st.session_state.chat_id,
+                            flowchart_path,
+                            flowchart_data.get(
+                                "title",
+                                "AI Generated Flowchart"
+                            )
+                        )
+
+                        if library_path:
+                            # Keep the library copy as the permanent reference
+                            # for this chat message.
+                            flowchart_path = library_path
+
             if flowchart_path:
-                st.image(flowchart_path, caption="AI Generated Flowchart", use_container_width=True)
-                answer = "📊 I created the flowchart for you."
+
+                st.image(
+                    flowchart_path,
+                    caption="📊 AI Generated Flowchart",
+                    use_container_width=True
+                )
+
+                answer = (
+                    "📊 I created the flowchart for you. "
+                    "You can ask me to modify it or create another one."
+                )
+
             else:
-                answer = "⚠️ I couldn't create the flowchart right now. Please try again."
-            st.markdown(answer)
+
+                answer = (
+                    "⚠️ I couldn't create the flowchart right now.\n\n"
+                    + str(flowchart_error or "Please try again.")
+                )
+
+            st.markdown(
+                answer
+            )
+
         else:
-            with st.spinner("🤖 Thinking..."):
+
+            with st.spinner(
+                "🤖 Thinking..."
+            ):
+
                 answer = generate_ai_response(
                     question=prompt,
                     chat_history=chat_history,
@@ -3273,7 +4024,10 @@ if chat_submission:
                     image_paths=image_paths,
                     user_sentiment=user_sentiment
                 )
-            st.markdown(answer)
+
+            st.markdown(
+                answer
+            )
 
 
     # --------------------------------------------------------
@@ -3302,7 +4056,8 @@ if chat_submission:
         username,
         st.session_state.chat_id,
         "assistant",
-        answer
+        answer,
+        flowchart_path=flowchart_path
     )
 
 
