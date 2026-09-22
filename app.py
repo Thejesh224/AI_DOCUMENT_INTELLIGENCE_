@@ -81,9 +81,14 @@ AVAILABLE_GEMINI_MODELS = [
     "gemini-3.6-flash",
     "gemini-3.5-flash",
 ]
-IMAGE_GENERATION_MODEL = os.getenv(
+# Gemini image-generation model.
+# Google currently documents gemini-3.1-flash-image for image generation.
+IMAGE_GENERATION_MODEL = st.secrets.get(
     "GEMINI_IMAGE_MODEL",
-    "gemini-3.8-flash-image"
+    os.getenv(
+        "GEMINI_IMAGE_MODEL",
+        "gemini-3.1-flash-image"
+    )
 )
 
 CHUNK_SIZE = 1200
@@ -1367,27 +1372,69 @@ def get_selected_model():
     return st.session_state.get("selected_gemini_model", GEMINI_MODEL)
 
 
+def is_image_generation_request(prompt):
+    """Detect a clear request to create an image from the normal chat box."""
+    text = (prompt or "").strip().lower()
+    if not text:
+        return False
+    action_words = (
+        "generate", "create", "make", "draw", "design",
+        "render", "illustrate", "paint", "produce"
+    )
+    image_words = (
+        "image", "picture", "photo", "illustration",
+        "poster", "logo", "wallpaper", "artwork", "drawing"
+    )
+    return any(a in text for a in action_words) and any(i in text for i in image_words)
+
+
 def generate_image_from_prompt(prompt):
-    """Generate an image with Gemini image generation when available."""
+    """Generate an image using Google's documented Gemini image model."""
     client = get_gemini_client()
     if client is None:
-        return None, "Gemini API key is not configured."
+        return None, "Gemini API key is not configured. Add GEMINI_API_KEY to Streamlit Secrets."
 
     try:
+        # Google documents gemini-3.1-flash-image with the Gemini Python SDK.
+        # Request IMAGE only so the response contains the generated image.
         response = client.models.generate_content(
             model=IMAGE_GENERATION_MODEL,
-            contents=prompt,
+            contents=[prompt],
             config=types.GenerateContentConfig(
-                response_modalities=["TEXT", "IMAGE"]
+                response_modalities=["IMAGE"]
             )
         )
+
         for part in getattr(response, "parts", []) or []:
             inline = getattr(part, "inline_data", None)
-            if inline and getattr(inline, "data", None):
-                return inline.data, None
-        return None, "The image model did not return an image."
+            if inline is not None and getattr(inline, "data", None):
+                return Image.open(BytesIO(inline.data)).copy(), None
+
+        # Some SDK responses expose the generated image through candidates.
+        for candidate in getattr(response, "candidates", []) or []:
+            content = getattr(candidate, "content", None)
+            for part in getattr(content, "parts", []) or []:
+                inline = getattr(part, "inline_data", None)
+                if inline is not None and getattr(inline, "data", None):
+                    return Image.open(BytesIO(inline.data)).copy(), None
+
+        return None, (
+            "Gemini returned no image. Check that your API key/project has access "
+            f"to {IMAGE_GENERATION_MODEL}, then try again."
+        )
     except Exception as error:
-        return None, str(error)
+        error_text = str(error)
+        if "404" in error_text or "NOT_FOUND" in error_text.upper():
+            return None, (
+                f"Image model '{IMAGE_GENERATION_MODEL}' is not available for this API key/project. "
+                "Use gemini-3.1-flash-image or check Gemini API access."
+            )
+        if "403" in error_text or "PERMISSION_DENIED" in error_text.upper():
+            return None, (
+                "Your Gemini API key/project does not have permission to use the image model. "
+                "Check the Gemini API setup and billing/access for image generation."
+            )
+        return None, f"Image generation error: {error_text}"
 
 
 def transcribe_audio_bytes(audio_bytes, mime_type="audio/wav"):
@@ -1650,12 +1697,20 @@ Answer the user's current question.
 
             try:
 
+                # Enable Gemini's built-in Google Search grounding.
+                # The model decides when live web information is needed, so
+                # document-only questions do not have to be turned into web searches.
                 response = client.models.generate_content(
                     model=model_name,
                     contents=contents,
                     config=types.GenerateContentConfig(
                         system_instruction=system_instruction,
-                        max_output_tokens=MAX_OUTPUT_TOKENS
+                        max_output_tokens=MAX_OUTPUT_TOKENS,
+                        tools=[
+                            types.Tool(
+                                google_search=types.GoogleSearch()
+                            )
+                        ]
                     )
                 )
 
@@ -1663,6 +1718,49 @@ Answer the user's current question.
 
                 if not answer:
                     return "I couldn't generate a response."
+
+                # Add the web sources returned by Gemini grounding.
+                # This gives the user a transparent list of external sources.
+                web_sources = []
+                try:
+                    candidates = getattr(response, "candidates", []) or []
+                    if candidates:
+                        metadata = getattr(
+                            candidates[0],
+                            "grounding_metadata",
+                            None
+                        )
+                        chunks = getattr(
+                            metadata,
+                            "grounding_chunks",
+                            []
+                        ) or []
+
+                        for chunk in chunks:
+                            web = getattr(chunk, "web", None)
+                            uri = getattr(web, "uri", None) if web else None
+                            title = getattr(web, "title", None) if web else None
+
+                            if uri and uri not in [
+                                item[0] for item in web_sources
+                            ]:
+                                web_sources.append((
+                                    uri,
+                                    title or uri
+                                ))
+                except Exception:
+                    web_sources = []
+
+                if web_sources:
+                    source_lines = [
+                        "\n\n---\n### 🌐 Web sources"
+                    ]
+                    for uri, title in web_sources[:8]:
+                        safe_title = str(title).replace("[", "(").replace("]", ")")
+                        source_lines.append(
+                            f"- [{safe_title}]({uri})"
+                        )
+                    answer = answer.strip() + "\n" + "\n".join(source_lines)
 
                 return answer.strip()
 
@@ -3173,6 +3271,63 @@ if st.session_state.get("voice_transcript") and not st.session_state.get("voice_
 if chat_submission:
 
     prompt = prompt.strip()
+
+    # --------------------------------------------------------
+    # IMAGE GENERATION FROM THE NORMAL CHAT BOX
+    # --------------------------------------------------------
+    # Example: "Create an image of a futuristic city at night"
+    # This keeps image generation in the main chat flow instead of
+    # requiring the user to open a separate tool panel.
+    if prompt and is_image_generation_request(prompt) and not attached_files:
+        current_chat = get_chat(
+            username,
+            st.session_state.chat_id
+        )
+
+        if current_chat.get("title") in [None, "", "New Chat"]:
+            generated_chat_name = generate_chat_title(prompt)
+            current_chat["title"] = generated_chat_name
+            current_chat["name"] = generated_chat_name
+            current_chat["updated_at"] = now_iso()
+            update_chat(
+                username,
+                st.session_state.chat_id,
+                current_chat
+            )
+
+        with st.chat_message("user", avatar="👤"):
+            st.markdown(prompt)
+
+        save_message(
+            username,
+            st.session_state.chat_id,
+            "user",
+            prompt
+        )
+
+        with st.chat_message("assistant", avatar="🤖"):
+            with st.spinner("🎨 Creating your image..."):
+                image_data, image_error = generate_image_from_prompt(prompt)
+
+            if image_data is not None:
+                st.image(image_data, use_container_width=True)
+                st.caption("Generated with Gemini")
+                save_message(
+                    username,
+                    st.session_state.chat_id,
+                    "assistant",
+                    "[Generated an image for this request.]"
+                )
+            else:
+                st.error(image_error or "I couldn't generate the image.")
+                save_message(
+                    username,
+                    st.session_state.chat_id,
+                    "assistant",
+                    image_error or "Image generation failed."
+                )
+
+        st.rerun()
 
     # --------------------------------------------------------
     # SAVE FILES FROM THE CHAT INPUT (+ ATTACHMENT BUTTON)
