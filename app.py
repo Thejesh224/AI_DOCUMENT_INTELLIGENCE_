@@ -1906,70 +1906,26 @@ def login_page():
 
     with login_tab:
 
-        username = st.text_input(
-            "Username",
-            key="login_username"
-        )
+        with st.form("login_form"):
+            username = st.text_input("Username", key="login_username")
+            password = st.text_input("Password", type="password", key="login_password")
+            login_submitted = st.form_submit_button("Login", use_container_width=True)
 
-        password = st.text_input(
-            "Password",
-            type="password",
-            key="login_password"
-        )
+        if login_submitted:
 
-        if st.button(
-            "Login",
-            use_container_width=True
-        ):
-
-            if login_user(
-                username,
-                password
-            ):
-
+            if login_user(username, password):
                 st.session_state.logged_in = True
-
-                st.session_state.username = (
-                    username
-                )
-
-                chats = get_user_chats(
-                    username
-                )
-
+                st.session_state.username = username
+                chats = get_user_chats(username)
                 if chats:
-
-                    sorted_chats = sorted(
-                        chats.values(),
-                        key=lambda x: x.get(
-                            "updated_at",
-                            ""
-                        ),
-                        reverse=True
-                    )
-
-                    st.session_state.chat_id = (
-                        sorted_chats[0]["id"]
-                    )
-
+                    sorted_chats = sorted(chats.values(), key=lambda x: x.get("updated_at", ""), reverse=True)
+                    st.session_state.chat_id = sorted_chats[0]["id"]
                 else:
-
-                    st.session_state.chat_id = (
-                        create_chat(
-                            username
-                        )
-                    )
-
+                    st.session_state.chat_id = create_chat(username)
                 load_current_chat_knowledge()
-
                 st.rerun()
-
             else:
-
-                st.error(
-                    "Invalid username or password."
-                )
-
+                st.error("Invalid username or password.")
 
     # ========================================================
     # SIGN UP
@@ -1977,77 +1933,30 @@ def login_page():
 
     with signup_tab:
 
-        new_username = st.text_input(
-            "Choose username",
-            key="signup_username"
-        )
+        with st.form("signup_form"):
+            new_username = st.text_input("Choose username", key="signup_username")
+            new_password = st.text_input("Choose password", type="password", key="signup_password")
+            confirm_password = st.text_input("Confirm password", type="password", key="signup_confirm")
+            signup_submitted = st.form_submit_button("Create Account", use_container_width=True)
 
-        new_password = st.text_input(
-            "Choose password",
-            type="password",
-            key="signup_password"
-        )
-
-        confirm_password = st.text_input(
-            "Confirm password",
-            type="password",
-            key="signup_confirm"
-        )
-
-        if st.button(
-            "Create Account",
-            use_container_width=True
-        ):
-
+        if signup_submitted:
             if not new_username.strip():
-
-                st.error(
-                    "Please enter a username."
-                )
-
+                st.error("Please enter a username.")
             elif not new_password:
-
-                st.error(
-                    "Please enter a password."
-                )
-
+                st.error("Please enter a password.")
             elif new_password != confirm_password:
-
-                st.error(
-                    "Passwords do not match."
-                )
-
+                st.error("Passwords do not match.")
             else:
-
-                success, message = create_user(
-                    new_username.strip(),
-                    new_password
-                )
-
+                success, message = create_user(new_username.strip(), new_password)
                 if success:
-
-                    chat_id = create_chat(
-                        new_username.strip()
-                    )
-
+                    chat_id = create_chat(new_username.strip())
                     st.session_state.logged_in = True
-
-                    st.session_state.username = (
-                        new_username.strip()
-                    )
-
-                    st.session_state.chat_id = (
-                        chat_id
-                    )
-
+                    st.session_state.username = new_username.strip()
+                    st.session_state.chat_id = chat_id
                     load_current_chat_knowledge()
-
                     st.success(message)
-
                     st.rerun()
-
                 else:
-
                     st.error(message)
 
 
