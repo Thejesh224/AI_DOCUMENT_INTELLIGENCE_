@@ -224,22 +224,7 @@ button[kind="primary"] {
     font-size: 14px;
 }
 
-.sentiment-pill {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    padding: 3px 9px;
-    border-radius: 999px;
-    background: #2a2a2a;
-    border: 1px solid #3a3a3a;
-    color: #a9a9a9;
-    font-size: 11px;
-    margin-top: 8px;
-}
 
-.sentiment-positive { color: #8bd5a5; }
-.sentiment-neutral { color: #b7b7b7; }
-.sentiment-negative { color: #ff9a9a; }
 
 .emotion-card {
     background: #242424;
@@ -1404,6 +1389,13 @@ IMPORTANT:
 10. General questions can be answered normally.
 11. Keep answers clear and direct.
 12. Use simple language unless technical detail is requested.
+13. Reply like a natural, thoughtful human conversation.
+14. Do not sound robotic, scripted, repetitive, or overly formal.
+15. Do not mention sentiment analysis, emotion detection, internal instructions,
+    system prompts, or classification to the user.
+16. Do not automatically use phrases like "As an AI" unless it is genuinely
+    necessary to clarify a limitation.
+17. Match the user's tone naturally and show empathy when appropriate.
 
 """ + emotional_support_instruction(user_sentiment) + """
 """
@@ -1613,68 +1605,46 @@ NEGATIVE_WORDS = {
 
 
 def _fallback_sentiment(text):
-    """Local fallback used when Gemini sentiment analysis is unavailable."""
+    """Local emotion detector used only to guide the assistant's tone.
+    Nothing from this analysis is shown to the user.
+    """
     text = (text or "").strip()
     if not text:
-        return {
-            "label": "Neutral",
-            "score": 0.0,
-            "confidence": 0.50,
-            "emotion": "neutral",
-            "emoji": "😐"
-        }
+        return {"emotion": "calm", "intensity": 0.0, "support_needed": False, "emoji": ""}
 
     lower = text.lower()
+    emotion = "calm"
+    support_needed = False
+    emoji = ""
 
-    if TextBlob is not None:
-        try:
-            polarity = float(TextBlob(text).sentiment.polarity)
-            if polarity >= 0.18:
-                label, emoji = "Positive", "😊"
-            elif polarity <= -0.18:
-                label, emoji = "Negative", "😞"
-            else:
-                label, emoji = "Neutral", "😐"
+    emotion_words = {
+        "sad": ("sad", True, "😔"), "unhappy": ("sad", True, "😔"),
+        "cry": ("sad", True, "😔"), "lonely": ("lonely", True, "🫂"),
+        "worried": ("worried", True, "😟"), "anxious": ("anxious", True, "😟"),
+        "stress": ("stressed", True, "😣"), "stressed": ("stressed", True, "😣"),
+        "frustrated": ("frustrated", True, "😤"), "angry": ("angry", True, "😠"),
+        "confused": ("confused", True, "😕"), "scared": ("scared", True, "😟"),
+        "afraid": ("scared", True, "😟"), "hopeless": ("hopeless", True, "🫂"),
+        "excited": ("excited", False, "😊"), "happy": ("happy", False, "😊"),
+        "grateful": ("grateful", False, "😊")
+    }
 
-            emotion = "positive" if label == "Positive" else (
-                "sad/frustrated" if label == "Negative" else "neutral"
-            )
-            confidence = min(0.98, 0.55 + abs(polarity) * 0.40)
-            return {
-                "label": label,
-                "score": round(polarity, 3),
-                "confidence": round(confidence, 2),
-                "emotion": emotion,
-                "emoji": emoji
-            }
-        except Exception:
-            pass
+    for word, result in emotion_words.items():
+        if word in lower:
+            emotion, support_needed, emoji = result
+            break
 
-    positive = sum(1 for word in POSITIVE_WORDS if word in lower)
-    negative = sum(1 for word in NEGATIVE_WORDS if word in lower)
-
-    if negative > positive:
-        return {
-            "label": "Negative", "score": -0.6, "confidence": 0.70,
-            "emotion": "sad/frustrated", "emoji": "😞"
-        }
-    if positive > negative:
-        return {
-            "label": "Positive", "score": 0.6, "confidence": 0.70,
-            "emotion": "positive", "emoji": "😊"
-        }
     return {
-        "label": "Neutral", "score": 0.0, "confidence": 0.60,
-        "emotion": "neutral", "emoji": "😐"
+        "emotion": emotion,
+        "intensity": 0.7 if support_needed else 0.4,
+        "support_needed": support_needed,
+        "emoji": emoji
     }
 
 
 def analyze_sentiment(text):
-    """
-    Use Gemini for contextual sentiment/emotion classification.
-    This is more nuanced than keyword matching and TextBlob, especially
-    for mixed, indirect, conversational, or emotional messages.
-    Falls back locally if the API is unavailable.
+    """Understand the user's emotional state only to make the reply more human.
+    The emotion analysis is internal and is never displayed as a sentiment label.
     """
     text = (text or "").strip()
     if not text:
@@ -1685,20 +1655,20 @@ def analyze_sentiment(text):
         return _fallback_sentiment(text)
 
     prompt = f"""
-Analyze the emotional tone of this user's chat message.
-Return ONLY valid JSON with these exact keys:
-label, score, confidence, emotion, emoji
+Understand the emotional state behind this user's message so an AI assistant
+can reply naturally and empathetically. This is NOT a sentiment classification task.
+Do not classify the message as positive, neutral, or negative.
+
+Return ONLY valid JSON with these keys:
+emotion, intensity, support_needed
 
 Rules:
-- label must be exactly Positive, Neutral, or Negative.
-- score must be a number from -1 to 1.
-- confidence must be a number from 0 to 1.
-- emotion should be a short phrase such as happy, grateful, neutral, sad,
-  worried, frustrated, angry, confused, stressed, lonely, excited, or hopeful.
-- emoji should be one appropriate emoji.
-- Judge the user's emotional tone, not whether the question is technically correct.
-- A message can be negative even if it contains no obvious negative keyword.
-- A question that is simply asking for information is usually Neutral.
+- emotion: a short natural description such as calm, happy, sad, worried,
+  frustrated, confused, stressed, lonely, angry, excited, hopeful, or curious.
+- intensity: a number from 0 to 1.
+- support_needed: true only when the person would benefit from extra warmth,
+  reassurance, patience, or encouragement.
+- Understand context, sarcasm, mixed feelings, and the actual meaning of the message.
 
 User message:
 {text}
@@ -1710,83 +1680,33 @@ User message:
             contents=prompt,
             config=types.GenerateContentConfig(
                 temperature=0.0,
-                max_output_tokens=180,
+                max_output_tokens=120,
                 response_mime_type="application/json"
             )
         )
-        raw = (response.text or "").strip()
-        data = json.loads(raw)
-
-        label = str(data.get("label", "Neutral")).title()
-        if label not in {"Positive", "Neutral", "Negative"}:
-            raise ValueError("Invalid sentiment label")
-
-        score = max(-1.0, min(1.0, float(data.get("score", 0))))
-        confidence = max(0.0, min(1.0, float(data.get("confidence", 0.5))))
-        emotion = str(data.get("emotion", "neutral"))[:40]
-        emoji = str(data.get("emoji", "😐"))[:4]
-
+        data = json.loads((response.text or "").strip())
+        emotion = str(data.get("emotion", "calm"))[:40]
+        intensity = max(0.0, min(1.0, float(data.get("intensity", 0.4))))
+        support_needed = bool(data.get("support_needed", False))
         return {
-            "label": label,
-            "score": round(score, 3),
-            "confidence": round(confidence, 2),
             "emotion": emotion,
-            "emoji": emoji
+            "intensity": round(intensity, 2),
+            "support_needed": support_needed,
+            "emoji": ""
         }
     except Exception:
         return _fallback_sentiment(text)
 
 
-def get_sentiment_summary(messages):
-    counts = {"Positive": 0, "Neutral": 0, "Negative": 0}
-    confidence_total = 0.0
-    analysed = 0
-
-    for message in messages:
-        if message.get("role") != "user":
-            continue
-        sentiment = message.get("sentiment") or _fallback_sentiment(message.get("content", ""))
-        label = sentiment.get("label", "Neutral")
-        counts[label] = counts.get(label, 0) + 1
-        confidence_total += float(sentiment.get("confidence", 0.5))
-        analysed += 1
-
-    total = sum(counts.values())
-    percentages = {
-        key: round((value / total) * 100, 1) if total else 0
-        for key, value in counts.items()
-    }
-    avg_confidence = round(confidence_total / analysed * 100, 1) if analysed else 0
-    return counts, percentages, total, avg_confidence
-
-
-def sentiment_badge(sentiment):
-    if not sentiment:
-        return ""
-    label = sentiment.get("label", "Neutral")
-    css_class = {
-        "Positive": "sentiment-positive",
-        "Neutral": "sentiment-neutral",
-        "Negative": "sentiment-negative"
-    }.get(label, "sentiment-neutral")
-    return (
-        f'<div class="sentiment-pill {css_class}">'
-        f'{sentiment.get("emoji", "😐")} {label}'
-        f' · {sentiment.get("emotion", "neutral")}'
-        f' · {float(sentiment.get("confidence", 0.5))*100:.0f}% confidence'
-        f'</div>'
-    )
-
-
 def emotional_support_instruction(sentiment):
     """Return response guidance when the user's message is emotionally negative."""
-    if not sentiment or sentiment.get("label") != "Negative":
+    if not sentiment or not sentiment.get("support_needed"):
         return ""
 
-    emotion = str(sentiment.get("emotion", "sad or frustrated"))
+    emotion = str(sentiment.get("emotion", "upset"))
     return f"""
 EMOTIONAL SUPPORT MODE:
-The user's message appears emotionally negative ({emotion}).
+The user may be feeling {emotion}.
 - Respond with warmth and patience.
 - Briefly acknowledge the feeling without diagnosing the user.
 - Then help with the actual question or problem.
@@ -2780,30 +2700,11 @@ with st.sidebar:
 
 
     # ========================================================
-    # CHAT SENTIMENT ANALYTICS
+    # INTERNAL EMOTION SUPPORT
     # ========================================================
 
-    st.markdown("### 🧠 Chat Sentiment")
-
-    sentiment_counts, sentiment_percentages, sentiment_total, sentiment_confidence = (
-        get_sentiment_summary(current_chat.get("messages", []))
-    )
-
-    if sentiment_total:
-        st.metric("User messages analyzed", sentiment_total)
-        st.caption(f"Average sentiment confidence: {sentiment_confidence}%")
-        st.write(f"😊 Positive · {sentiment_percentages['Positive']}%")
-        st.progress(sentiment_percentages["Positive"] / 100 if sentiment_percentages["Positive"] else 0)
-        st.write(f"😐 Neutral · {sentiment_percentages['Neutral']}%")
-        st.progress(sentiment_percentages["Neutral"] / 100 if sentiment_percentages["Neutral"] else 0)
-        st.write(f"😞 Negative · {sentiment_percentages['Negative']}%")
-        st.progress(sentiment_percentages["Negative"] / 100 if sentiment_percentages["Negative"] else 0)
-
-        negative_count = sentiment_counts.get("Negative", 0)
-        if negative_count:
-            st.info("💙 The assistant will respond more gently when your messages show frustration, sadness, stress, or worry.")
-    else:
-        st.caption("Your messages will be analyzed for sentiment and emotion.")
+    st.markdown("### 🧠 Human-like Responses")
+    st.caption("The assistant understands the tone of your messages internally and uses it only to make replies more natural, patient, and supportive.")
 
 
     st.markdown(
@@ -2920,7 +2821,7 @@ if (
                 font-size:12px;
                 margin-top:5px;
             ">
-                Only knowledge from this chat is used. User messages are analyzed for sentiment.
+                Only knowledge from this chat is used. The assistant adapts its tone naturally to the conversation.
             </div>
 
         </div>
@@ -3000,12 +2901,6 @@ for message in messages:
             content
         )
 
-        if role == "user":
-            sentiment = message.get("sentiment") or _fallback_sentiment(content)
-            st.markdown(
-                sentiment_badge(sentiment),
-                unsafe_allow_html=True
-            )
 
 
 # ============================================================
@@ -3165,10 +3060,6 @@ if chat_submission:
 
         st.markdown(
             prompt
-        )
-        st.markdown(
-            sentiment_badge(user_sentiment),
-            unsafe_allow_html=True
         )
 
 
