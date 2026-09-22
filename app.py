@@ -1,3 +1,5 @@
+
+
 # ============================================================
 # AI DOCUMENT INTELLIGENCE
 # ChatGPT-style Recent Chats
@@ -97,78 +99,156 @@ st.markdown(
     """
 <style>
 
+/* ========================================================
+   ChatGPT-inspired dark workspace
+   ======================================================== */
+html, body, [class*="css"] {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI",
+                 Helvetica, Arial, sans-serif;
+}
+
 .stApp {
-    background: #191919;
-    color: #f5f5f5;
+    background: #212121;
+    color: #ececec;
+}
+
+header[data-testid="stHeader"] {
+    background: #212121;
 }
 
 .main .block-container {
-    max-width: 1200px;
-    padding-top: 1.5rem;
-    padding-bottom: 7rem;
+    max-width: 768px;
+    padding-top: 1.25rem;
+    padding-bottom: 8rem;
 }
 
 section[data-testid="stSidebar"] {
-    background: #111111;
-    border-right: 1px solid #2d2d2d;
+    background: #171717;
+    border-right: 1px solid #2f2f2f;
+}
+
+section[data-testid="stSidebar"] > div {
+    background: #171717;
 }
 
 section[data-testid="stSidebar"] * {
-    color: #f5f5f5;
+    color: #ececec;
 }
 
 section[data-testid="stSidebar"] button {
-    border-radius: 8px;
+    border: 0 !important;
+    background: transparent !important;
+    text-align: left !important;
+    border-radius: 8px !important;
+}
+
+section[data-testid="stSidebar"] button:hover {
+    background: #2a2a2a !important;
+}
+
+section[data-testid="stSidebar"] [data-testid="stFileUploader"] {
+    background: #202020;
+    border-radius: 10px;
+    padding: 4px;
 }
 
 [data-testid="stChatMessage"] {
-    border-radius: 12px;
+    background: transparent !important;
+    border: 0 !important;
+    padding: 1.1rem 0 !important;
+    margin: 0 !important;
 }
 
 [data-testid="stChatMessageContent"] {
-    font-size: 15px;
+    font-size: 15.5px;
     line-height: 1.65;
+    color: #ececec;
 }
 
 [data-testid="stChatInput"] {
-    background: #242424;
-}
-
-
-/* ChatGPT-inspired interface */
-.main .block-container {
-    max-width: 980px;
-    margin: 0 auto;
-}
-
-[data-testid="stSidebar"] {
-    min-width: 280px;
-}
-
-[data-testid="stChatMessage"] {
-    padding: 1rem 0.75rem;
-    margin: 0.15rem 0;
+    background: #2f2f2f !important;
+    border: 1px solid #424242 !important;
+    border-radius: 26px !important;
+    box-shadow: 0 2px 12px rgba(0,0,0,.22);
 }
 
 [data-testid="stChatInput"] textarea {
-    border-radius: 22px !important;
-    background: #2f2f2f !important;
-    color: #ffffff !important;
+    background: transparent !important;
+    color: #f5f5f5 !important;
+    border: none !important;
+    font-size: 15px !important;
 }
 
-.sentiment-pill {
-    display: inline-block;
-    padding: 3px 9px;
-    border-radius: 999px;
-    background: #2b2b2b;
-    color: #bdbdbd;
-    font-size: 12px;
-    margin-top: 6px;
+[data-testid="stChatInput"] textarea::placeholder {
+    color: #9b9b9b !important;
+}
+
+[data-testid="stChatInput"] button {
+    border-radius: 50% !important;
+}
+
+button[kind="primary"] {
+    background: #ffffff !important;
+    color: #171717 !important;
+    border: 0 !important;
 }
 
 .chat-title {
-    font-size: 18px;
+    font-size: 16px;
     font-weight: 600;
+    color: #ececec;
+}
+
+.chat-subtitle {
+    color: #8e8e8e;
+    font-size: 12px;
+}
+
+.welcome-wrap {
+    text-align: center;
+    margin-top: 20vh;
+}
+
+.welcome-icon {
+    font-size: 38px;
+    margin-bottom: 14px;
+}
+
+.welcome-title {
+    color: #ececec;
+    font-size: 30px;
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+
+.welcome-text {
+    color: #9b9b9b;
+    font-size: 14px;
+}
+
+.sentiment-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 9px;
+    border-radius: 999px;
+    background: #2a2a2a;
+    border: 1px solid #3a3a3a;
+    color: #a9a9a9;
+    font-size: 11px;
+    margin-top: 8px;
+}
+
+.sentiment-positive { color: #8bd5a5; }
+.sentiment-neutral { color: #b7b7b7; }
+.sentiment-negative { color: #ff9a9a; }
+
+.emotion-card {
+    background: #242424;
+    border: 1px solid #383838;
+    border-radius: 12px;
+    padding: 12px 14px;
+    margin-top: 10px;
 }
 
 .divider {
@@ -177,11 +257,20 @@ section[data-testid="stSidebar"] button {
     margin: 12px 0;
 }
 
+.small-muted {
+    color: #8e8e8e;
+    font-size: 12px;
+}
+
+/* Remove Streamlit's default decorative spacing around chat controls. */
+[data-testid="stBottomBlockContainer"] {
+    background: linear-gradient(transparent, #212121 25%);
+}
+
 </style>
 """,
     unsafe_allow_html=True
 )
-
 
 # ============================================================
 # GENERAL HELPERS
@@ -1278,7 +1367,8 @@ def generate_ai_response(
     chat_history,
     document_context,
     sources,
-    image_paths
+    image_paths,
+    user_sentiment=None
 ):
 
     client = get_gemini_client()
@@ -1313,6 +1403,8 @@ IMPORTANT:
 10. General questions can be answered normally.
 11. Keep answers clear and direct.
 12. Use simple language unless technical detail is requested.
+
+""" + emotional_support_instruction(user_sentiment) + """
 """
 
 
@@ -1497,14 +1589,15 @@ Answer the user's current question.
 
 
 # ============================================================
-# SENTIMENT ANALYSIS
+# SENTIMENT + EMOTION ANALYSIS
 # ============================================================
 
 POSITIVE_WORDS = {
     "amazing", "awesome", "good", "great", "happy", "helpful",
     "love", "like", "excellent", "perfect", "thanks", "thank",
-    "useful", "clear", "easy", "best", "nice", "wonderful",
-    "success", "successful", "excited", "confident", "understand"
+    "useful", "clear", "easy", "nice", "wonderful", "success",
+    "successful", "excited", "confident", "understand", "proud",
+    "relieved", "glad", "enjoy", "enjoying"
 }
 
 NEGATIVE_WORDS = {
@@ -1512,72 +1605,200 @@ NEGATIVE_WORDS = {
     "difficult", "hard", "wrong", "error", "problem", "issue",
     "fail", "failed", "failure", "worried", "fear", "useless",
     "poor", "terrible", "awful", "frustrated", "frustrating",
-    "disappointed", "disappointing", "don't understand", "cannot understand"
+    "disappointed", "disappointing", "depressed", "lonely",
+    "stressed", "stress", "anxious", "anxiety", "upset",
+    "cry", "crying", "hopeless", "tired", "exhausted", "scared"
 }
 
-def analyze_sentiment(text):
-    """Return a simple sentiment label, score, and emoji for a user message."""
+
+def _fallback_sentiment(text):
+    """Local fallback used when Gemini sentiment analysis is unavailable."""
     text = (text or "").strip()
     if not text:
-        return {"label": "Neutral", "score": 0.0, "emoji": "😐"}
+        return {
+            "label": "Neutral",
+            "score": 0.0,
+            "confidence": 0.50,
+            "emotion": "neutral",
+            "emoji": "😐"
+        }
+
+    lower = text.lower()
 
     if TextBlob is not None:
         try:
             polarity = float(TextBlob(text).sentiment.polarity)
-            if polarity > 0.10:
+            if polarity >= 0.18:
                 label, emoji = "Positive", "😊"
-            elif polarity < -0.10:
+            elif polarity <= -0.18:
                 label, emoji = "Negative", "😞"
             else:
                 label, emoji = "Neutral", "😐"
+
+            emotion = "positive" if label == "Positive" else (
+                "sad/frustrated" if label == "Negative" else "neutral"
+            )
+            confidence = min(0.98, 0.55 + abs(polarity) * 0.40)
             return {
                 "label": label,
                 "score": round(polarity, 3),
+                "confidence": round(confidence, 2),
+                "emotion": emotion,
                 "emoji": emoji
             }
         except Exception:
             pass
 
-    lower = text.lower()
     positive = sum(1 for word in POSITIVE_WORDS if word in lower)
     negative = sum(1 for word in NEGATIVE_WORDS if word in lower)
-    total = positive + negative
 
-    if total == 0 or positive == negative:
-        return {"label": "Neutral", "score": 0.0, "emoji": "😐"}
+    if negative > positive:
+        return {
+            "label": "Negative", "score": -0.6, "confidence": 0.70,
+            "emotion": "sad/frustrated", "emoji": "😞"
+        }
+    if positive > negative:
+        return {
+            "label": "Positive", "score": 0.6, "confidence": 0.70,
+            "emotion": "positive", "emoji": "😊"
+        }
+    return {
+        "label": "Neutral", "score": 0.0, "confidence": 0.60,
+        "emotion": "neutral", "emoji": "😐"
+    }
 
-    score = (positive - negative) / max(total, 1)
-    if score > 0:
-        return {"label": "Positive", "score": round(score, 3), "emoji": "😊"}
-    return {"label": "Negative", "score": round(score, 3), "emoji": "😞"}
+
+def analyze_sentiment(text):
+    """
+    Use Gemini for contextual sentiment/emotion classification.
+    This is more nuanced than keyword matching and TextBlob, especially
+    for mixed, indirect, conversational, or emotional messages.
+    Falls back locally if the API is unavailable.
+    """
+    text = (text or "").strip()
+    if not text:
+        return _fallback_sentiment(text)
+
+    client = get_gemini_client()
+    if client is None:
+        return _fallback_sentiment(text)
+
+    prompt = f"""
+Analyze the emotional tone of this user's chat message.
+Return ONLY valid JSON with these exact keys:
+label, score, confidence, emotion, emoji
+
+Rules:
+- label must be exactly Positive, Neutral, or Negative.
+- score must be a number from -1 to 1.
+- confidence must be a number from 0 to 1.
+- emotion should be a short phrase such as happy, grateful, neutral, sad,
+  worried, frustrated, angry, confused, stressed, lonely, excited, or hopeful.
+- emoji should be one appropriate emoji.
+- Judge the user's emotional tone, not whether the question is technically correct.
+- A message can be negative even if it contains no obvious negative keyword.
+- A question that is simply asking for information is usually Neutral.
+
+User message:
+{text}
+"""
+
+    try:
+        response = client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                temperature=0.0,
+                max_output_tokens=180,
+                response_mime_type="application/json"
+            )
+        )
+        raw = (response.text or "").strip()
+        data = json.loads(raw)
+
+        label = str(data.get("label", "Neutral")).title()
+        if label not in {"Positive", "Neutral", "Negative"}:
+            raise ValueError("Invalid sentiment label")
+
+        score = max(-1.0, min(1.0, float(data.get("score", 0))))
+        confidence = max(0.0, min(1.0, float(data.get("confidence", 0.5))))
+        emotion = str(data.get("emotion", "neutral"))[:40]
+        emoji = str(data.get("emoji", "😐"))[:4]
+
+        return {
+            "label": label,
+            "score": round(score, 3),
+            "confidence": round(confidence, 2),
+            "emotion": emotion,
+            "emoji": emoji
+        }
+    except Exception:
+        return _fallback_sentiment(text)
 
 
 def get_sentiment_summary(messages):
     counts = {"Positive": 0, "Neutral": 0, "Negative": 0}
+    confidence_total = 0.0
+    analysed = 0
+
     for message in messages:
         if message.get("role") != "user":
             continue
-        sentiment = message.get("sentiment") or analyze_sentiment(message.get("content", ""))
+        sentiment = message.get("sentiment") or _fallback_sentiment(message.get("content", ""))
         label = sentiment.get("label", "Neutral")
         counts[label] = counts.get(label, 0) + 1
+        confidence_total += float(sentiment.get("confidence", 0.5))
+        analysed += 1
 
     total = sum(counts.values())
     percentages = {
         key: round((value / total) * 100, 1) if total else 0
         for key, value in counts.items()
     }
-    return counts, percentages, total
+    avg_confidence = round(confidence_total / analysed * 100, 1) if analysed else 0
+    return counts, percentages, total, avg_confidence
 
 
 def sentiment_badge(sentiment):
     if not sentiment:
         return ""
+    label = sentiment.get("label", "Neutral")
+    css_class = {
+        "Positive": "sentiment-positive",
+        "Neutral": "sentiment-neutral",
+        "Negative": "sentiment-negative"
+    }.get(label, "sentiment-neutral")
     return (
-        f'<div class="sentiment-pill">'
-        f'{sentiment.get("emoji", "😐")} {sentiment.get("label", "Neutral")} '
-        f'• score {sentiment.get("score", 0):.2f}'
+        f'<div class="sentiment-pill {css_class}">'
+        f'{sentiment.get("emoji", "😐")} {label}'
+        f' · {sentiment.get("emotion", "neutral")}'
+        f' · {float(sentiment.get("confidence", 0.5))*100:.0f}% confidence'
         f'</div>'
     )
+
+
+def emotional_support_instruction(sentiment):
+    """Return response guidance when the user's message is emotionally negative."""
+    if not sentiment or sentiment.get("label") != "Negative":
+        return ""
+
+    emotion = str(sentiment.get("emotion", "sad or frustrated"))
+    return f"""
+EMOTIONAL SUPPORT MODE:
+The user's message appears emotionally negative ({emotion}).
+- Respond with warmth and patience.
+- Briefly acknowledge the feeling without diagnosing the user.
+- Then help with the actual question or problem.
+- If appropriate, offer one or two practical next steps that can help the user
+  feel more in control or hopeful.
+- Try to gently lift the user's mood when it fits the conversation by pointing
+  out a realistic positive next step, a small win, or an encouraging perspective.
+- Do not force positivity, guilt the user, or say they must be happy.
+- Do not pretend to be a therapist.
+- If the user explicitly expresses immediate danger or self-harm, encourage
+  contacting local emergency services or a trusted person and keep the response
+  focused on immediate safety.
+"""
 
 
 # ============================================================
@@ -1588,7 +1809,8 @@ def save_message(
     username,
     chat_id,
     role,
-    content
+    content,
+    sentiment=None
 ):
 
     chat = get_chat(
@@ -1607,7 +1829,7 @@ def save_message(
             "role": role,
             "content": content,
             "timestamp": now_iso(),
-            "sentiment": analyze_sentiment(content) if role == "user" else None
+            "sentiment": sentiment if role == "user" else None
         }
     )
 
@@ -2712,20 +2934,25 @@ with st.sidebar:
 
     st.markdown("### 🧠 Chat Sentiment")
 
-    sentiment_counts, sentiment_percentages, sentiment_total = (
+    sentiment_counts, sentiment_percentages, sentiment_total, sentiment_confidence = (
         get_sentiment_summary(current_chat.get("messages", []))
     )
 
     if sentiment_total:
         st.metric("User messages analyzed", sentiment_total)
-        st.write(f"😊 Positive — {sentiment_counts['Positive']} ({sentiment_percentages['Positive']}%)")
+        st.caption(f"Average sentiment confidence: {sentiment_confidence}%")
+        st.write(f"😊 Positive · {sentiment_percentages['Positive']}%")
         st.progress(sentiment_percentages["Positive"] / 100 if sentiment_percentages["Positive"] else 0)
-        st.write(f"😐 Neutral — {sentiment_counts['Neutral']} ({sentiment_percentages['Neutral']}%)")
+        st.write(f"😐 Neutral · {sentiment_percentages['Neutral']}%")
         st.progress(sentiment_percentages["Neutral"] / 100 if sentiment_percentages["Neutral"] else 0)
-        st.write(f"😞 Negative — {sentiment_counts['Negative']} ({sentiment_percentages['Negative']}%)")
+        st.write(f"😞 Negative · {sentiment_percentages['Negative']}%")
         st.progress(sentiment_percentages["Negative"] / 100 if sentiment_percentages["Negative"] else 0)
+
+        negative_count = sentiment_counts.get("Negative", 0)
+        if negative_count:
+            st.info("💙 The assistant will respond more gently when your messages show frustration, sadness, stress, or worry.")
     else:
-        st.caption("Send messages to see sentiment analytics.")
+        st.caption("Your messages will be analyzed for sentiment and emotion.")
 
 
     st.markdown(
@@ -2873,34 +3100,10 @@ if not messages:
 
     st.html(
         """
-        <div style="
-            text-align:center;
-            margin-top:100px;
-            color:#999;
-        ">
-
-            <div style="
-                font-size:55px;
-                margin-bottom:10px;
-            ">
-                🤖
-            </div>
-
-            <div style="
-                color:#f5f5f5;
-                font-size:28px;
-                font-weight:600;
-                margin-bottom:8px;
-            ">
-                How can I help you?
-            </div>
-
-            <div style="
-                font-size:15px;
-            ">
-                Upload a document and ask questions about it.
-            </div>
-
+        <div class="welcome-wrap">
+            <div class="welcome-icon">✦</div>
+            <div class="welcome-title">How can I help you today?</div>
+            <div class="welcome-text">Ask questions, upload documents, or start a conversation.</div>
         </div>
         """
     )
@@ -2947,7 +3150,7 @@ for message in messages:
         )
 
         if role == "user":
-            sentiment = message.get("sentiment") or analyze_sentiment(content)
+            sentiment = message.get("sentiment") or _fallback_sentiment(content)
             st.markdown(
                 sentiment_badge(sentiment),
                 unsafe_allow_html=True
@@ -2959,7 +3162,7 @@ for message in messages:
 # ============================================================
 
 prompt = st.chat_input(
-    "Message AI Document Intelligence...",
+    "Message AI Document Intelligence",
     key=(
         "chat_input_"
         + st.session_state.chat_id
@@ -3032,7 +3235,8 @@ if prompt:
         username,
         st.session_state.chat_id,
         "user",
-        prompt
+        prompt,
+        sentiment=user_sentiment
     )
 
 
@@ -3093,7 +3297,8 @@ if prompt:
                 chat_history=chat_history,
                 document_context=document_context,
                 sources=sources,
-                image_paths=image_paths
+                image_paths=image_paths,
+                user_sentiment=user_sentiment
             )
 
         st.markdown(
@@ -3156,3 +3361,4 @@ if prompt:
     # --------------------------------------------------------
 
     st.rerun()
+
