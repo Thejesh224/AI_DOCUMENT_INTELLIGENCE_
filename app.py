@@ -47,39 +47,29 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+
 # ============================================================
 # SETTINGS
 # ============================================================
 
 APP_NAME = "AI Document Intelligence"
 
-# Default Gemini model
-GEMINI_MODEL = st.secrets.get(
-    "GEMINI_MODEL",
-    os.getenv(
-        "GEMINI_MODEL",
-        "gemini-2.5-flash"
-    )
-)
+GEMINI_MODEL = "gemini-3.5-flash"
 
-# Fallback models
 GEMINI_FALLBACK_MODELS = [
-    "gemini-2.5-flash-lite",
+    "gemini-3.5-flash-lite",
 ]
 
 GEMINI_RETRY_COUNT = 2
 GEMINI_RETRY_DELAY_SECONDS = 2
 
-# Maximum output token request
-MAX_OUTPUT_TOKENS = 100000
+MAX_OUTPUT_TOKENS = 65536
 
-# Models available in the sidebar
 AVAILABLE_GEMINI_MODELS = [
-    "gemini-2.5-flash",
-    "gemini-2.5-flash-lite",
+    "gemini-3.5-flash",
+    "gemini-3.5-flash-lite",
 ]
 
-# Document processing
 CHUNK_SIZE = 1200
 CHUNK_OVERLAP = 150
 RETRIEVER_K = 5
@@ -95,6 +85,7 @@ CHAT_STORAGE.mkdir(
     parents=True,
     exist_ok=True
 )
+
 
 # ============================================================
 # CSS
@@ -1487,6 +1478,7 @@ IMPORTANT:
 33. If a request falls into one of these restricted areas, clearly explain the limitation in simple language and, when possible, provide a safe informational alternative such as summarizing the uploaded document, explaining concepts, checking arithmetic, or preparing questions for a qualified professional.
 34. Never claim that this application can replace a CA, doctor, lawyer, auditor, financial advisor, engineer, emergency responder, or other licensed/qualified professional.
 35. The application can support optional voice input by transcribing user-provided audio into text. Do not claim to hear audio unless audio was actually supplied.
+36. The application can support optional image generation when the user explicitly asks to create an image. Do not claim an image was generated unless the image tool actually returned image data.
 37. The application includes a limited Python execution utility for short, non-network, non-file-access code. Never claim it is a secure unrestricted coding sandbox.
 38. When useful, act as a tool-orchestrating assistant: decide whether the user's request needs document retrieval, image understanding, calculation, code execution, or ordinary conversation, and use only the relevant capability.
 39. The application can let the user choose among supported Gemini foundation models. Clearly distinguish the selected model from any claim about model quality.
@@ -1619,20 +1611,12 @@ Answer the user's current question.
 
             try:
 
-                # Enable Gemini's built-in Google Search grounding.
-                # The model decides when live web information is needed, so
-                # document-only questions do not have to be turned into web searches.
                 response = client.models.generate_content(
                     model=model_name,
                     contents=contents,
                     config=types.GenerateContentConfig(
                         system_instruction=system_instruction,
-                        max_output_tokens=MAX_OUTPUT_TOKENS,
-                        tools=[
-                            types.Tool(
-                                google_search=types.GoogleSearch()
-                            )
-                        ]
+                        max_output_tokens=MAX_OUTPUT_TOKENS
                     )
                 )
 
@@ -1640,49 +1624,6 @@ Answer the user's current question.
 
                 if not answer:
                     return "I couldn't generate a response."
-
-                # Add the web sources returned by Gemini grounding.
-                # This gives the user a transparent list of external sources.
-                web_sources = []
-                try:
-                    candidates = getattr(response, "candidates", []) or []
-                    if candidates:
-                        metadata = getattr(
-                            candidates[0],
-                            "grounding_metadata",
-                            None
-                        )
-                        chunks = getattr(
-                            metadata,
-                            "grounding_chunks",
-                            []
-                        ) or []
-
-                        for chunk in chunks:
-                            web = getattr(chunk, "web", None)
-                            uri = getattr(web, "uri", None) if web else None
-                            title = getattr(web, "title", None) if web else None
-
-                            if uri and uri not in [
-                                item[0] for item in web_sources
-                            ]:
-                                web_sources.append((
-                                    uri,
-                                    title or uri
-                                ))
-                except Exception:
-                    web_sources = []
-
-                if web_sources:
-                    source_lines = [
-                        "\n\n---\n### 🌐 Web sources"
-                    ]
-                    for uri, title in web_sources[:8]:
-                        safe_title = str(title).replace("[", "(").replace("]", ")")
-                        source_lines.append(
-                            f"- [{safe_title}]({uri})"
-                        )
-                    answer = answer.strip() + "\n" + "\n".join(source_lines)
 
                 return answer.strip()
 
@@ -2603,7 +2544,7 @@ with st.sidebar:
             st.code(run_python_code_safely(code), language="text")
 
         st.info(
-            "Voice input and code execution are optional tools. "
+            "Voice, image generation, and code execution are optional tools. "
             "Code execution is intentionally limited and is not a production sandbox."
         )
 
