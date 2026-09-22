@@ -1,5 +1,3 @@
-
-
 # ============================================================
 # AI DOCUMENT INTELLIGENCE
 # ChatGPT-style Recent Chats
@@ -534,6 +532,7 @@ def create_chat(
     chats[username][chat_id] = {
         "id": chat_id,
         "title": title,
+        "name": title,
         "created_at": now_iso(),
         "updated_at": now_iso(),
         "messages": [],
@@ -650,7 +649,9 @@ def rename_chat(
     if not chat:
         return
 
-    chat["title"] = title.strip()[:80]
+    clean_title = title.strip()[:80]
+    chat["title"] = clean_title
+    chat["name"] = clean_title
     chat["updated_at"] = now_iso()
 
     update_chat(
@@ -2233,8 +2234,11 @@ with st.sidebar:
             chat_id = chat["id"]
 
             title = chat.get(
-                "title",
-                "New Chat"
+                "name",
+                chat.get(
+                    "title",
+                    "New Chat"
+                )
             )
 
             if len(title) > 35:
@@ -2998,7 +3002,7 @@ st.html(
     ">
 
         <div class="chat-title">
-            {current_chat.get("title", "New Chat")}
+            {current_chat.get("name", current_chat.get("title", "New Chat"))}
         </div>
 
         <div style="
@@ -3204,10 +3208,15 @@ if prompt:
         "New Chat"
     ]:
 
-        current_chat["title"] = (
-            generate_chat_title(
-                prompt
-            )
+        generated_chat_name = generate_chat_title(prompt)
+        current_chat["title"] = generated_chat_name
+        current_chat["name"] = generated_chat_name
+        current_chat["updated_at"] = now_iso()
+
+        update_chat(
+            username,
+            st.session_state.chat_id,
+            current_chat
         )
 
 
@@ -3361,4 +3370,3 @@ if prompt:
     # --------------------------------------------------------
 
     st.rerun()
-
