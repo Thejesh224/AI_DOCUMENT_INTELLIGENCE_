@@ -12,6 +12,11 @@ import hashlib
 import shutil
 import time
 from pathlib import Path
+
+try:
+    from textblob import TextBlob
+except Exception:
+    TextBlob = None
 from datetime import datetime, timedelta
 
 import streamlit as st
@@ -127,6 +132,43 @@ section[data-testid="stSidebar"] button {
 
 [data-testid="stChatInput"] {
     background: #242424;
+}
+
+
+/* ChatGPT-inspired interface */
+.main .block-container {
+    max-width: 980px;
+    margin: 0 auto;
+}
+
+[data-testid="stSidebar"] {
+    min-width: 280px;
+}
+
+[data-testid="stChatMessage"] {
+    padding: 1rem 0.75rem;
+    margin: 0.15rem 0;
+}
+
+[data-testid="stChatInput"] textarea {
+    border-radius: 22px !important;
+    background: #2f2f2f !important;
+    color: #ffffff !important;
+}
+
+.sentiment-pill {
+    display: inline-block;
+    padding: 3px 9px;
+    border-radius: 999px;
+    background: #2b2b2b;
+    color: #bdbdbd;
+    font-size: 12px;
+    margin-top: 6px;
+}
+
+.chat-title {
+    font-size: 18px;
+    font-weight: 600;
 }
 
 .divider {
@@ -1455,6 +1497,90 @@ Answer the user's current question.
 
 
 # ============================================================
+# SENTIMENT ANALYSIS
+# ============================================================
+
+POSITIVE_WORDS = {
+    "amazing", "awesome", "good", "great", "happy", "helpful",
+    "love", "like", "excellent", "perfect", "thanks", "thank",
+    "useful", "clear", "easy", "best", "nice", "wonderful",
+    "success", "successful", "excited", "confident", "understand"
+}
+
+NEGATIVE_WORDS = {
+    "bad", "hate", "sad", "angry", "confused", "confusing",
+    "difficult", "hard", "wrong", "error", "problem", "issue",
+    "fail", "failed", "failure", "worried", "fear", "useless",
+    "poor", "terrible", "awful", "frustrated", "frustrating",
+    "disappointed", "disappointing", "don't understand", "cannot understand"
+}
+
+def analyze_sentiment(text):
+    """Return a simple sentiment label, score, and emoji for a user message."""
+    text = (text or "").strip()
+    if not text:
+        return {"label": "Neutral", "score": 0.0, "emoji": "😐"}
+
+    if TextBlob is not None:
+        try:
+            polarity = float(TextBlob(text).sentiment.polarity)
+            if polarity > 0.10:
+                label, emoji = "Positive", "😊"
+            elif polarity < -0.10:
+                label, emoji = "Negative", "😞"
+            else:
+                label, emoji = "Neutral", "😐"
+            return {
+                "label": label,
+                "score": round(polarity, 3),
+                "emoji": emoji
+            }
+        except Exception:
+            pass
+
+    lower = text.lower()
+    positive = sum(1 for word in POSITIVE_WORDS if word in lower)
+    negative = sum(1 for word in NEGATIVE_WORDS if word in lower)
+    total = positive + negative
+
+    if total == 0 or positive == negative:
+        return {"label": "Neutral", "score": 0.0, "emoji": "😐"}
+
+    score = (positive - negative) / max(total, 1)
+    if score > 0:
+        return {"label": "Positive", "score": round(score, 3), "emoji": "😊"}
+    return {"label": "Negative", "score": round(score, 3), "emoji": "😞"}
+
+
+def get_sentiment_summary(messages):
+    counts = {"Positive": 0, "Neutral": 0, "Negative": 0}
+    for message in messages:
+        if message.get("role") != "user":
+            continue
+        sentiment = message.get("sentiment") or analyze_sentiment(message.get("content", ""))
+        label = sentiment.get("label", "Neutral")
+        counts[label] = counts.get(label, 0) + 1
+
+    total = sum(counts.values())
+    percentages = {
+        key: round((value / total) * 100, 1) if total else 0
+        for key, value in counts.items()
+    }
+    return counts, percentages, total
+
+
+def sentiment_badge(sentiment):
+    if not sentiment:
+        return ""
+    return (
+        f'<div class="sentiment-pill">'
+        f'{sentiment.get("emoji", "😐")} {sentiment.get("label", "Neutral")} '
+        f'• score {sentiment.get("score", 0):.2f}'
+        f'</div>'
+    )
+
+
+# ============================================================
 # SAVE MESSAGE
 # ============================================================
 
@@ -1480,7 +1606,8 @@ def save_message(
         {
             "role": role,
             "content": content,
-            "timestamp": now_iso()
+            "timestamp": now_iso(),
+            "sentiment": analyze_sentiment(content) if role == "user" else None
         }
     )
 
@@ -2580,6 +2707,33 @@ with st.sidebar:
 
 
     # ========================================================
+    # CHAT SENTIMENT ANALYTICS
+    # ========================================================
+
+    st.markdown("### 🧠 Chat Sentiment")
+
+    sentiment_counts, sentiment_percentages, sentiment_total = (
+        get_sentiment_summary(current_chat.get("messages", []))
+    )
+
+    if sentiment_total:
+        st.metric("User messages analyzed", sentiment_total)
+        st.write(f"😊 Positive — {sentiment_counts['Positive']} ({sentiment_percentages['Positive']}%)")
+        st.progress(sentiment_percentages["Positive"] / 100 if sentiment_percentages["Positive"] else 0)
+        st.write(f"😐 Neutral — {sentiment_counts['Neutral']} ({sentiment_percentages['Neutral']}%)")
+        st.progress(sentiment_percentages["Neutral"] / 100 if sentiment_percentages["Neutral"] else 0)
+        st.write(f"😞 Negative — {sentiment_counts['Negative']} ({sentiment_percentages['Negative']}%)")
+        st.progress(sentiment_percentages["Negative"] / 100 if sentiment_percentages["Negative"] else 0)
+    else:
+        st.caption("Send messages to see sentiment analytics.")
+
+
+    st.markdown(
+        "---"
+    )
+
+
+    # ========================================================
     # LOGOUT
     # ========================================================
 
@@ -2616,19 +2770,16 @@ st.html(
         margin-bottom:20px;
     ">
 
-        <div style="
-            font-size:30px;
-            font-weight:700;
-        ">
-            🤖 {current_chat.get("title", "New Chat")}
+        <div class="chat-title">
+            {current_chat.get("title", "New Chat")}
         </div>
 
         <div style="
-            color:#999;
-            font-size:14px;
+            color:#8f8f8f;
+            font-size:13px;
             margin-top:5px;
         ">
-            Ask questions about the documents in this chat.
+            AI Document Intelligence · ChatGPT-style workspace
         </div>
 
     </div>
@@ -2691,7 +2842,7 @@ if (
                 font-size:12px;
                 margin-top:5px;
             ">
-                Only knowledge from this chat is used.
+                Only knowledge from this chat is used. User messages are analyzed for sentiment.
             </div>
 
         </div>
@@ -2795,6 +2946,13 @@ for message in messages:
             content
         )
 
+        if role == "user":
+            sentiment = message.get("sentiment") or analyze_sentiment(content)
+            st.markdown(
+                sentiment_badge(sentiment),
+                unsafe_allow_html=True
+            )
+
 
 # ============================================================
 # CHAT INPUT
@@ -2854,6 +3012,8 @@ if prompt:
     # USER MESSAGE
     # --------------------------------------------------------
 
+    user_sentiment = analyze_sentiment(prompt)
+
     with st.chat_message(
         "user",
         avatar="👤"
@@ -2861,6 +3021,10 @@ if prompt:
 
         st.markdown(
             prompt
+        )
+        st.markdown(
+            sentiment_badge(user_sentiment),
+            unsafe_allow_html=True
         )
 
 
