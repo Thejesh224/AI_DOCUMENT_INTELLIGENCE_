@@ -11,6 +11,8 @@ import uuid
 import hashlib
 import shutil
 import time
+import subprocess
+import tempfile
 from pathlib import Path
 
 try:
@@ -71,6 +73,18 @@ GEMINI_RETRY_COUNT = 2
 GEMINI_RETRY_DELAY_SECONDS = 2
 
 MAX_OUTPUT_TOKENS = 4096
+
+# Optional advanced AI capabilities. These use the same Gemini API key.
+AVAILABLE_GEMINI_MODELS = [
+    "gemini-3.8-flash",
+    "gemini-3.7-flash",
+    "gemini-3.6-flash",
+    "gemini-3.5-flash",
+]
+IMAGE_GENERATION_MODEL = os.getenv(
+    "GEMINI_IMAGE_MODEL",
+    "gemini-3.8-flash-image"
+)
 
 CHUNK_SIZE = 1200
 CHUNK_OVERLAP = 150
@@ -1345,6 +1359,95 @@ def get_gemini_client():
 
 
 # ============================================================
+# ADVANCED AI CAPABILITIES
+# ============================================================
+
+def get_selected_model():
+    """Return the model selected for the current session."""
+    return st.session_state.get("selected_gemini_model", GEMINI_MODEL)
+
+
+def generate_image_from_prompt(prompt):
+    """Generate an image with Gemini image generation when available."""
+    client = get_gemini_client()
+    if client is None:
+        return None, "Gemini API key is not configured."
+
+    try:
+        response = client.models.generate_content(
+            model=IMAGE_GENERATION_MODEL,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                response_modalities=["TEXT", "IMAGE"]
+            )
+        )
+        for part in getattr(response, "parts", []) or []:
+            inline = getattr(part, "inline_data", None)
+            if inline and getattr(inline, "data", None):
+                return inline.data, None
+        return None, "The image model did not return an image."
+    except Exception as error:
+        return None, str(error)
+
+
+def transcribe_audio_bytes(audio_bytes, mime_type="audio/wav"):
+    """Transcribe a voice recording using the selected Gemini model."""
+    client = get_gemini_client()
+    if client is None:
+        return None, "Gemini API key is not configured."
+
+    try:
+        response = client.models.generate_content(
+            model=get_selected_model(),
+            contents=[
+                types.Part.from_bytes(data=audio_bytes, mime_type=mime_type),
+                "Transcribe this audio exactly. Return only the spoken words."
+            ]
+        )
+        return (response.text or "").strip(), None
+    except Exception as error:
+        return None, str(error)
+
+
+def run_python_code_safely(code):
+    """Run a short Python snippet in a temporary directory with a timeout.
+
+    This is intentionally limited and should not be treated as a secure sandbox.
+    Do not use it for untrusted production workloads.
+    """
+    if len(code) > 12000:
+        return "Code is too long for the built-in execution tool."
+
+    blocked = [
+        "os.system", "subprocess", "shutil.rmtree", "socket", "requests.",
+        "urllib", "httpx", "pathlib.Path('/", "pathlib.Path(\"/",
+        "__import__", "eval(", "exec(", "open("
+    ]
+    lowered = code.lower().replace(" ", "")
+    if any(item.lower().replace(" ", "") in lowered for item in blocked):
+        return "For safety, this project does not execute code that accesses the operating system, network, or arbitrary files."
+
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            result = subprocess.run(
+                ["python", "-I", "-c", code],
+                cwd=temp_dir,
+                capture_output=True,
+                text=True,
+                timeout=8,
+                env={"PATH": os.environ.get("PATH", "")}
+            )
+            output = (result.stdout + result.stderr).strip()
+            if not output:
+                output = "Code executed successfully with no output."
+            return output[:12000]
+    except subprocess.TimeoutExpired:
+        return "Execution stopped because it exceeded the 8-second limit."
+    except Exception as error:
+        return f"Execution error: {error}"
+
+
+# ============================================================
 # GEMINI RESPONSE
 # ============================================================
 
@@ -1396,6 +1499,31 @@ IMPORTANT:
 16. Do not automatically use phrases like "As an AI" unless it is genuinely
     necessary to clarify a limitation.
 17. Match the user's tone naturally and show empathy when appropriate.
+18. You can also act as a practical accounting and CA-calculation assistant when the user asks for it.
+19. Help with common accounting calculations such as totals, percentages, profit/loss, GST calculations, discounts, markups, depreciation, interest, margins, ratios, debit/credit summaries, invoice totals, and basic financial statements.
+20. For every calculation, clearly show the formula, values used, and final result so the user can verify it.
+21. Do the arithmetic carefully and re-check the result before answering.
+22. For tax, GST, TDS, income-tax, or other compliance-related calculations, clearly state the assumptions, financial year/jurisdiction, and rates used. Do not present changing tax rules as permanent facts. If required information is missing, ask for it instead of guessing.
+23. If the user provides an invoice, statement, spreadsheet, PDF, or other financial document, use the current chat document data for the calculation and mention which figures were used.
+24. These accounting/CA calculations are an additional capability; do not turn every normal question into an accounting answer.
+25. This application is NOT a replacement for licensed professionals or specialized high-stakes systems.
+26. For medical questions, provide general educational information and document-based information only. Do NOT diagnose a person, prescribe treatment, recommend medication changes, or claim to replace a doctor. Encourage consultation with a qualified healthcare professional when appropriate.
+27. For legal questions, provide general information and document summarization only. Do NOT make legally binding decisions, provide legal representation, or present the answer as a substitute for a qualified lawyer.
+28. For accounting, auditing, GST, income-tax, or other financial-compliance questions, calculations and explanations may be provided, but do NOT claim to perform or sign an official audit, certify financial statements, file GST or income-tax returns automatically, or make legally binding tax decisions.
+29. Do NOT provide personalized stock-market trading decisions, guaranteed investment recommendations, or autonomous financial transactions. You may explain financial concepts or analyze user-provided historical/current documents without making the decision for the user.
+30. Do NOT make automatic loan or credit approval decisions. You may analyze provided criteria or explain how credit-related calculations work, but the final decision must remain with an authorized human or approved institutional process.
+31. Do NOT control industrial machines, physical equipment, or safety-critical systems. Do not issue instructions that directly operate such systems.
+32. For emergencies or safety-critical situations, do not act as the decision-maker. Give cautious general information and direct the user to appropriate emergency services or qualified professionals.
+33. If a request falls into one of these restricted areas, clearly explain the limitation in simple language and, when possible, provide a safe informational alternative such as summarizing the uploaded document, explaining concepts, checking arithmetic, or preparing questions for a qualified professional.
+34. Never claim that this application can replace a CA, doctor, lawyer, auditor, financial advisor, engineer, emergency responder, or other licensed/qualified professional.
+35. The application can support optional voice input by transcribing user-provided audio into text. Do not claim to hear audio unless audio was actually supplied.
+36. The application can support optional image generation when the user explicitly asks to create an image. Do not claim an image was generated unless the image tool actually returned image data.
+37. The application includes a limited Python execution utility for short, non-network, non-file-access code. Never claim it is a secure unrestricted coding sandbox.
+38. When useful, act as a tool-orchestrating assistant: decide whether the user's request needs document retrieval, image understanding, calculation, code execution, or ordinary conversation, and use only the relevant capability.
+39. The application can let the user choose among supported Gemini foundation models. Clearly distinguish the selected model from any claim about model quality.
+40. Chat history provides application-level persistence. Do not claim enterprise-scale cloud memory or permanent storage unless a real cloud database has been configured.
+41. External integrations/connectors are only available when their APIs or connectors are actually configured. Do not invent access to external services.
+42. Never claim infrastructure scale, reliability, context limits, or capabilities equivalent to a large commercial AI platform.
 
 """ + emotional_support_instruction(user_sentiment) + """
 """
@@ -1507,7 +1635,7 @@ Answer the user's current question.
     # Try the configured model first. If Gemini temporarily returns
     # 503/5xx/429, retry it and then move to the fallback models.
 
-    models_to_try = [GEMINI_MODEL]
+    models_to_try = [get_selected_model()]
 
     for fallback_model in GEMINI_FALLBACK_MODELS:
         if fallback_model not in models_to_try:
@@ -1676,7 +1804,7 @@ User message:
 
     try:
         response = client.models.generate_content(
-            model=GEMINI_MODEL,
+            model=get_selected_model(),
             contents=prompt,
             config=types.GenerateContentConfig(
                 temperature=0.0,
@@ -2272,6 +2400,27 @@ with st.sidebar:
 
 
     # ========================================================
+    # AI MODEL
+    # ========================================================
+
+    if "selected_gemini_model" not in st.session_state:
+        st.session_state.selected_gemini_model = GEMINI_MODEL
+
+    selected_model = st.selectbox(
+        "🧠 AI Model",
+        AVAILABLE_GEMINI_MODELS,
+        index=(
+            AVAILABLE_GEMINI_MODELS.index(st.session_state.selected_gemini_model)
+            if st.session_state.selected_gemini_model in AVAILABLE_GEMINI_MODELS
+            else 0
+        ),
+        key="model_selector"
+    )
+    st.session_state.selected_gemini_model = selected_model
+
+    st.caption("Choose the Gemini model used for chat and voice transcription.")
+
+    # ========================================================
     # NEW CHAT
     # ========================================================
 
@@ -2392,6 +2541,65 @@ with st.sidebar:
         "---"
     )
 
+
+    # ========================================================
+    # ADVANCED AI TOOLS
+    # ========================================================
+
+    with st.expander("🛠️ Advanced AI Tools"):
+        st.caption("Optional tools available in this project.")
+
+        audio_value = st.audio_input(
+            "🎙️ Voice input",
+            key="voice_input"
+        )
+
+        if audio_value is not None:
+            audio_bytes = audio_value.getvalue()
+            transcript, transcript_error = transcribe_audio_bytes(
+                audio_bytes,
+                getattr(audio_value, "type", None) or "audio/wav"
+            )
+            if transcript_error:
+                st.error(transcript_error)
+            elif transcript:
+                st.session_state.voice_transcript = transcript
+                st.success("Voice transcribed. You can copy it into the chat box.")
+                st.text_area(
+                    "Transcript",
+                    value=transcript,
+                    height=100,
+                    key="voice_transcript_display"
+                )
+
+        image_prompt = st.text_area(
+            "🎨 Image generation prompt",
+            placeholder="Describe the image you want to create...",
+            key="image_generation_prompt"
+        )
+        if st.button("Generate Image", use_container_width=True) and image_prompt.strip():
+            with st.spinner("Creating image..."):
+                image_data, image_error = generate_image_from_prompt(image_prompt.strip())
+            if image_data:
+                st.image(image_data, caption="Generated image")
+                st.session_state.last_generated_image = image_data
+            else:
+                st.error(image_error or "Image generation failed.")
+
+        code = st.text_area(
+            "💻 Run short Python code",
+            placeholder="print(2 + 2)",
+            height=100,
+            key="code_execution_input"
+        )
+        if st.button("Run Code", use_container_width=True) and code.strip():
+            st.code(code, language="python")
+            st.code(run_python_code_safely(code), language="text")
+
+        st.info(
+            "Voice, image generation, and code execution are optional tools. "
+            "Code execution is intentionally limited and is not a production sandbox."
+        )
 
     # ========================================================
     # CHAT SETTINGS
@@ -2948,6 +3156,14 @@ if chat_submission:
             []
         ) or []
     )
+
+
+# ============================================================
+# OPTIONAL VOICE TRANSCRIPT HANDOFF
+# ============================================================
+
+if st.session_state.get("voice_transcript") and not st.session_state.get("voice_transcript_consumed"):
+    st.info("🎙️ Voice transcript ready. Copy it into the message box to send it.")
 
 
 # ============================================================
