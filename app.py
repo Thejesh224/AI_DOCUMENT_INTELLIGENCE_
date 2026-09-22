@@ -81,16 +81,6 @@ AVAILABLE_GEMINI_MODELS = [
     "gemini-3.6-flash",
     "gemini-3.5-flash",
 ]
-# Gemini image-generation model.
-# Google currently documents gemini-3.1-flash-image for image generation.
-IMAGE_GENERATION_MODEL = st.secrets.get(
-    "GEMINI_IMAGE_MODEL",
-    os.getenv(
-        "GEMINI_IMAGE_MODEL",
-        "gemini-3.1-flash-image"
-    )
-)
-
 CHUNK_SIZE = 1200
 CHUNK_OVERLAP = 150
 RETRIEVER_K = 5
@@ -1372,71 +1362,6 @@ def get_selected_model():
     return st.session_state.get("selected_gemini_model", GEMINI_MODEL)
 
 
-def is_image_generation_request(prompt):
-    """Detect a clear request to create an image from the normal chat box."""
-    text = (prompt or "").strip().lower()
-    if not text:
-        return False
-    action_words = (
-        "generate", "create", "make", "draw", "design",
-        "render", "illustrate", "paint", "produce"
-    )
-    image_words = (
-        "image", "picture", "photo", "illustration",
-        "poster", "logo", "wallpaper", "artwork", "drawing"
-    )
-    return any(a in text for a in action_words) and any(i in text for i in image_words)
-
-
-def generate_image_from_prompt(prompt):
-    """Generate an image using Google's documented Gemini image model."""
-    client = get_gemini_client()
-    if client is None:
-        return None, "Gemini API key is not configured. Add GEMINI_API_KEY to Streamlit Secrets."
-
-    try:
-        # Google documents gemini-3.1-flash-image with the Gemini Python SDK.
-        # Request IMAGE only so the response contains the generated image.
-        response = client.models.generate_content(
-            model=IMAGE_GENERATION_MODEL,
-            contents=[prompt],
-            config=types.GenerateContentConfig(
-                response_modalities=["IMAGE"]
-            )
-        )
-
-        for part in getattr(response, "parts", []) or []:
-            inline = getattr(part, "inline_data", None)
-            if inline is not None and getattr(inline, "data", None):
-                return Image.open(BytesIO(inline.data)).copy(), None
-
-        # Some SDK responses expose the generated image through candidates.
-        for candidate in getattr(response, "candidates", []) or []:
-            content = getattr(candidate, "content", None)
-            for part in getattr(content, "parts", []) or []:
-                inline = getattr(part, "inline_data", None)
-                if inline is not None and getattr(inline, "data", None):
-                    return Image.open(BytesIO(inline.data)).copy(), None
-
-        return None, (
-            "Gemini returned no image. Check that your API key/project has access "
-            f"to {IMAGE_GENERATION_MODEL}, then try again."
-        )
-    except Exception as error:
-        error_text = str(error)
-        if "404" in error_text or "NOT_FOUND" in error_text.upper():
-            return None, (
-                f"Image model '{IMAGE_GENERATION_MODEL}' is not available for this API key/project. "
-                "Use gemini-3.1-flash-image or check Gemini API access."
-            )
-        if "403" in error_text or "PERMISSION_DENIED" in error_text.upper():
-            return None, (
-                "Your Gemini API key/project does not have permission to use the image model. "
-                "Check the Gemini API setup and billing/access for image generation."
-            )
-        return None, f"Image generation error: {error_text}"
-
-
 def transcribe_audio_bytes(audio_bytes, mime_type="audio/wav"):
     """Transcribe a voice recording using the selected Gemini model."""
     client = get_gemini_client()
@@ -1564,7 +1489,6 @@ IMPORTANT:
 33. If a request falls into one of these restricted areas, clearly explain the limitation in simple language and, when possible, provide a safe informational alternative such as summarizing the uploaded document, explaining concepts, checking arithmetic, or preparing questions for a qualified professional.
 34. Never claim that this application can replace a CA, doctor, lawyer, auditor, financial advisor, engineer, emergency responder, or other licensed/qualified professional.
 35. The application can support optional voice input by transcribing user-provided audio into text. Do not claim to hear audio unless audio was actually supplied.
-36. The application can support optional image generation when the user explicitly asks to create an image. Do not claim an image was generated unless the image tool actually returned image data.
 37. The application includes a limited Python execution utility for short, non-network, non-file-access code. Never claim it is a secure unrestricted coding sandbox.
 38. When useful, act as a tool-orchestrating assistant: decide whether the user's request needs document retrieval, image understanding, calculation, code execution, or ordinary conversation, and use only the relevant capability.
 39. The application can let the user choose among supported Gemini foundation models. Clearly distinguish the selected model from any claim about model quality.
@@ -2670,20 +2594,6 @@ with st.sidebar:
                     key="voice_transcript_display"
                 )
 
-        image_prompt = st.text_area(
-            "🎨 Image generation prompt",
-            placeholder="Describe the image you want to create...",
-            key="image_generation_prompt"
-        )
-        if st.button("Generate Image", use_container_width=True) and image_prompt.strip():
-            with st.spinner("Creating image..."):
-                image_data, image_error = generate_image_from_prompt(image_prompt.strip())
-            if image_data:
-                st.image(image_data, caption="Generated image")
-                st.session_state.last_generated_image = image_data
-            else:
-                st.error(image_error or "Image generation failed.")
-
         code = st.text_area(
             "💻 Run short Python code",
             placeholder="print(2 + 2)",
@@ -2695,7 +2605,7 @@ with st.sidebar:
             st.code(run_python_code_safely(code), language="text")
 
         st.info(
-            "Voice, image generation, and code execution are optional tools. "
+            "Voice input and code execution are optional tools. "
             "Code execution is intentionally limited and is not a production sandbox."
         )
 
@@ -3271,63 +3181,6 @@ if st.session_state.get("voice_transcript") and not st.session_state.get("voice_
 if chat_submission:
 
     prompt = prompt.strip()
-
-    # --------------------------------------------------------
-    # IMAGE GENERATION FROM THE NORMAL CHAT BOX
-    # --------------------------------------------------------
-    # Example: "Create an image of a futuristic city at night"
-    # This keeps image generation in the main chat flow instead of
-    # requiring the user to open a separate tool panel.
-    if prompt and is_image_generation_request(prompt) and not attached_files:
-        current_chat = get_chat(
-            username,
-            st.session_state.chat_id
-        )
-
-        if current_chat.get("title") in [None, "", "New Chat"]:
-            generated_chat_name = generate_chat_title(prompt)
-            current_chat["title"] = generated_chat_name
-            current_chat["name"] = generated_chat_name
-            current_chat["updated_at"] = now_iso()
-            update_chat(
-                username,
-                st.session_state.chat_id,
-                current_chat
-            )
-
-        with st.chat_message("user", avatar="👤"):
-            st.markdown(prompt)
-
-        save_message(
-            username,
-            st.session_state.chat_id,
-            "user",
-            prompt
-        )
-
-        with st.chat_message("assistant", avatar="🤖"):
-            with st.spinner("🎨 Creating your image..."):
-                image_data, image_error = generate_image_from_prompt(prompt)
-
-            if image_data is not None:
-                st.image(image_data, use_container_width=True)
-                st.caption("Generated with Gemini")
-                save_message(
-                    username,
-                    st.session_state.chat_id,
-                    "assistant",
-                    "[Generated an image for this request.]"
-                )
-            else:
-                st.error(image_error or "I couldn't generate the image.")
-                save_message(
-                    username,
-                    st.session_state.chat_id,
-                    "assistant",
-                    image_error or "Image generation failed."
-                )
-
-        st.rerun()
 
     # --------------------------------------------------------
     # SAVE FILES FROM THE CHAT INPUT (+ ATTACHMENT BUTTON)
